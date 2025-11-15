@@ -1,0 +1,220 @@
+.schedule-page {
+  min-height: 100vh;
+  padding-bottom: 80px;
+  background: #f5f5f5;
+}
+
+.schedule-header {
+  background: #e3f2fd;
+  padding: 1rem;
+}
+
+.schedule-header h1 {
+  margin: 0 0 0.5rem 0;
+  color: #333;
+  font-size: 1.2rem;
+}
+
+.schedule-header h2 {
+  margin: 0;
+  color: #666;
+  font-size: 1rem;
+  font-weight: normal;
+}
+
+.medication-selection {
+  margin: 1rem 0;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.calendar-section {
+  background: white;
+  padding: 1rem;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+.calendar-header-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.calendar-header-controls h3 {
+  margin: 0;
+  color: #333;
+  font-size: 1rem;
+}
+
+.nav-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: #2196F3;
+  padding: 0.25rem 0.5rem;
+}
+
+.nav-btn:hover {
+  color: #1976D2;
+}
+
+.selection-banner {
+  background: #e3f2fd;
+  padding: 0.75rem;
+  border-radius: 4px 4px 0 0;
+  color: #333;
+  font-weight: 500;
+}
+
+.medication-select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #e3f2fd;
+  border-radius: 0 0 4px 4px;
+  font-size: 1rem;
+  background: white;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%232196F3' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2.5rem;
+}
+
+.view-toggle-section {
+  display: flex;
+  gap: 0;
+  background: #f0f0f0;
+  border-radius: 20px;
+  padding: 0.25rem;
+  margin-bottom: 1rem;
+  width: fit-content;
+}
+
+.toggle-btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  background: transparent;
+  border-radius: 16px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #666;
+  transition: all 0.3s;
+}
+
+.toggle-btn.active {
+  background: white;
+  color: #333;
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+.time-selection {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+.time-selection h3 {
+  margin: 0 0 1rem 0;
+  color: #333;
+  font-size: 1rem;
+}
+
+.time-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 0.5rem;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.time-slot {
+  padding: 0.75rem;
+  border: 1px solid #2196F3;
+  background: white;
+  color: #2196F3;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.3s;
+}
+
+.time-slot:hover {
+  background: #e3f2fd;
+}
+
+.time-slot.selected {
+  background: #2196F3;
+  color: white;
+}
+
+.time-slot.add-time {
+  background: #2196F3;
+  color: white;
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.period-selection {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+.period-selection h3 {
+  margin: 0 0 1rem 0;
+  color: #333;
+  font-size: 1rem;
+}
+
+.period-toggle {
+  display: flex;
+  gap: 0;
+  background: white;
+  border-radius: 20px;
+  padding: 0.25rem;
+  border: 1px solid #ddd;
+}
+
+.period-btn {
+  flex: 1;
+  padding: 0.75rem;
+  border: none;
+  background: transparent;
+  border-radius: 16px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #666;
+  transition: all 0.3s;
+}
+
+.period-btn.active {
+  background: #f0f0f0;
+  color: #333;
+  font-weight: 500;
+}
+
+.submit-btn {
+  width: 100%;
+  padding: 1rem;
+  background: #2196F3;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  font-weight: 500;
+  cursor: pointer;
+  margin-top: 1rem;
+  transition: background 0.3s;
+}
+
+.submit-btn:hover {
+  background: #1976D2;
+}
+

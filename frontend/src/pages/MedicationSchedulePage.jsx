@@ -1,0 +1,253 @@
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import Calendar from '../components/Calendar'
+import BottomNav from '../components/BottomNav'
+import './MedicationSchedulePage.css'
+
+function MedicationSchedulePage() {
+  const navigate = useNavigate()
+  const [medications, setMedications] = useState([])
+  const [selectedMedication, setSelectedMedication] = useState(null)
+  const [selectedDates, setSelectedDates] = useState([])
+  const [selectedTimes, setSelectedTimes] = useState([])
+  const [periodType, setPeriodType] = useState('daily')
+  const [viewType, setViewType] = useState('day')
+  const [currentDate, setCurrentDate] = useState(new Date())
+  const [showScheduleForm, setShowScheduleForm] = useState(false)
+
+  const monthNames = [
+    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+  ]
+
+  const timeSlots = []
+  for (let hour = 0; hour < 24; hour++) {
+    timeSlots.push(`${hour.toString().padStart(2, '0')}:00`)
+  }
+
+  useEffect(() => {
+    // TODO: Загрузить список лекарств из API
+    setMedications([
+      { id: 1, name: 'Коллаген морской', quantity: '1 капсула' },
+      { id: 2, name: 'Магния цитрат', quantity: '2 таблетки' },
+      { id: 3, name: 'Omega-3', quantity: '1 капсула' }
+    ])
+  }, [])
+
+  const handleMedicationSelect = (medication) => {
+    setSelectedMedication(medication)
+    setShowScheduleForm(true)
+    setSelectedDates([])
+    setSelectedTimes([])
+  }
+
+  const handleDateClick = (date) => {
+    setSelectedDates(prev => {
+      const dateStr = date.toISOString().split('T')[0]
+      const existingIndex = prev.findIndex(d => d.toISOString().split('T')[0] === dateStr)
+      
+      if (existingIndex >= 0) {
+        return prev.filter((_, index) => index !== existingIndex)
+      } else {
+        return [...prev, date].sort((a, b) => a - b)
+      }
+    })
+  }
+
+  const toggleTime = (time) => {
+    setSelectedTimes(prev => 
+      prev.includes(time) 
+        ? prev.filter(t => t !== time).sort()
+        : [...prev, time].sort()
+    )
+  }
+
+  const handleAddCustomTime = () => {
+    const time = prompt('Введите время в формате HH:MM (например, 09:00)')
+    if (time && /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time)) {
+      if (!selectedTimes.includes(time)) {
+        setSelectedTimes([...selectedTimes, time].sort())
+      }
+    } else if (time) {
+      alert('Неверный формат времени. Используйте формат HH:MM (например, 09:00)')
+    }
+  }
+
+  const handleSubmitSchedule = () => {
+    if (!selectedMedication) {
+      alert('Выберите лекарство')
+      return
+    }
+    if (selectedDates.length === 0) {
+      alert('Выберите хотя бы одну дату')
+      return
+    }
+    if (selectedTimes.length === 0) {
+      alert('Выберите хотя бы одно время приема')
+      return
+    }
+    
+    // TODO: Отправить данные на API
+    console.log('Данные для отправки:', {
+      medication_id: selectedMedication.id,
+      dates: selectedDates,
+      times: selectedTimes,
+      period_type: periodType
+    })
+    
+    alert('Лекарство добавлено в расписание!')
+    setShowScheduleForm(false)
+    setSelectedMedication(null)
+    setSelectedDates([])
+    setSelectedTimes([])
+  }
+
+  const navigateMonth = (direction) => {
+    const newDate = new Date(currentDate)
+    newDate.setMonth(currentDate.getMonth() + direction)
+    setCurrentDate(newDate)
+  }
+
+  if (showScheduleForm && selectedMedication) {
+    return (
+      <div className="schedule-page">
+        <div className="schedule-header">
+          <h1>Добавление лекарства в расписание</h1>
+          <button className="back-btn" onClick={() => setShowScheduleForm(false)}>
+            ← Назад
+          </button>
+        </div>
+
+        <div className="container">
+          <div className="medication-info">
+            <div className="medication-name-display">
+              {selectedMedication.name}, {selectedMedication.quantity}
+            </div>
+          </div>
+
+          <div className="calendar-section">
+            <div className="calendar-header-controls">
+              <button onClick={() => navigateMonth(-1)} className="nav-btn">‹</button>
+              <h3>{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</h3>
+              <button onClick={() => navigateMonth(1)} className="nav-btn">›</button>
+            </div>
+
+            <div className="view-toggle-section">
+              <button
+                className={`toggle-btn ${viewType === 'day' ? 'active' : ''}`}
+                onClick={() => setViewType('day')}
+              >
+                День
+              </button>
+              <button
+                className={`toggle-btn ${viewType === 'month' ? 'active' : ''}`}
+                onClick={() => setViewType('month')}
+              >
+                Месяц
+              </button>
+            </div>
+
+            <Calendar 
+              viewType={viewType} 
+              selectedDate={selectedDates[0] || currentDate}
+              selectedDates={selectedDates}
+              onDateSelect={handleDateClick}
+              currentDate={currentDate}
+            />
+          </div>
+
+          <div className="time-selection">
+            <h3>Время приема</h3>
+            <div className="time-grid">
+              <button 
+                className="time-slot add-time" 
+                onClick={handleAddCustomTime}
+              >
+                +
+              </button>
+              {timeSlots.map(time => (
+                <button
+                  key={time}
+                  className={`time-slot ${selectedTimes.includes(time) ? 'selected' : ''}`}
+                  onClick={() => toggleTime(time)}
+                >
+                  {time}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="period-selection">
+            <h3>Период приема</h3>
+            <div className="period-toggle">
+              <button
+                className={`period-btn ${periodType === 'daily' ? 'active' : ''}`}
+                onClick={() => setPeriodType('daily')}
+              >
+                Каждый день
+              </button>
+              <button
+                className={`period-btn ${periodType === 'every_other_day' ? 'active' : ''}`}
+                onClick={() => setPeriodType('every_other_day')}
+              >
+                Через день
+              </button>
+            </div>
+          </div>
+
+          <button onClick={handleSubmitSchedule} className="submit-btn">
+            Добавить
+          </button>
+        </div>
+
+        <BottomNav />
+      </div>
+    )
+  }
+
+  return (
+    <div className="medication-schedule-page">
+      <div className="schedule-header">
+        <h1>Лекарства</h1>
+        <p>Расписание приема лекарств</p>
+      </div>
+
+      <div className="container">
+        <div className="schedule-content">
+          <h2>Выберите лекарство для добавления в расписание</h2>
+          <p className="info-text">Выберите лекарство из списка, чтобы настроить расписание его приема</p>
+          
+          <div className="medications-grid">
+            {medications.length === 0 ? (
+              <div className="empty-state">
+                <p>У вас пока нет лекарств</p>
+                <button 
+                  className="btn-primary"
+                  onClick={() => navigate('/medications')}
+                >
+                  Перейти в каталог лекарств
+                </button>
+              </div>
+            ) : (
+              medications.map((medication) => (
+                <div
+                  key={medication.id}
+                  className="medication-card"
+                  onClick={() => handleMedicationSelect(medication)}
+                >
+                  <div className="medication-card-name">{medication.name}</div>
+                  <div className="medication-card-quantity">{medication.quantity}</div>
+                  <button className="add-to-schedule-btn">Добавить в расписание</button>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      <BottomNav />
+    </div>
+  )
+}
+
+export default MedicationSchedulePage
