@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import health, auth, users, appointments, medications, schedules
+
+from app.routers import appointments, auth, health, medications, schedules, users
+from app.database import Base, engine
 
 app = FastAPI(
     title="Fullstack API - Medication Tracker",
@@ -8,6 +10,7 @@ app = FastAPI(
     version="1.0.0"
 )
 
+Base.metadata.create_all(bind=engine)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://localhost:5173"],

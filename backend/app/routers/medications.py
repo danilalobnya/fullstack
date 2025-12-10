@@ -1,73 +1,141 @@
-from fastapi import APIRouter, Query
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Header, HTTPException, Query, status, Depends
 from typing import List, Optional
-from datetime import time
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.models import db_models
+from app.schemas.medications import (
+    CreateMedicationRequest,
+    MedicationResponse,
+    UpdateMedicationRequest,
+)
 
 router = APIRouter(prefix="/medications", tags=["Medications"])
-
-
-class CreateMedicationRequest(BaseModel):
-    name: str = Field(..., description="Название лекарства")
-    quantity: str = Field(..., description="Количество")
-    dosage: str = Field(..., description="Дозировка")
-    description: Optional[str] = Field(None, description="Описание")
-    take_with_food: Optional[str] = Field(None, description="before/with/after - до/во время/после еды")
-
-
-class UpdateMedicationRequest(BaseModel):
-    name: Optional[str] = None
-    quantity: Optional[str] = None
-    dosage: Optional[str] = None
-    description: Optional[str] = None
-    take_with_food: Optional[str] = None
-
-
-class MedicationResponse(BaseModel):
-    id: int
-    name: str
-    quantity: str
-    dosage: str
-    description: Optional[str]
-    take_with_food: Optional[str]
+DEFAULT_USER_ID = 1
 
 
 @router.get("/", response_model=List[MedicationResponse])
 async def get_medications(
     search: Optional[str] = Query(None, description="Поиск по названию"),
-    user_id: Optional[int] = None
+    user_id: Optional[int] = None,
+    user_id_header: int | None = Header(default=None, alias="X-User-Id"),
+    db: Session = Depends(get_db),
 ):
     """
     Получить список лекарств
     Поиск по названию через параметр search
     """
-    pass
+    target_user_id = user_id or user_id_header or DEFAULT_USER_ID
+    user = db.get(db_models.User, target_user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
+
+    query = db.query(db_models.Medication).filter(db_models.Medication.user_id == target_user_id)
+    if search:
+        like = f"%{search.lower()}%"
+        query = query.filter(db_models.Medication.name.ilike(like))
+    medications = query.all()
+    return [
+        MedicationResponse(
+            id=med.id,
+            name=med.name,
+            quantity=med.quantity,
+            dosage=med.dosage,
+            description=med.description,
+            take_with_food=med.take_with_food,
+        )
+        for med in medications
+    ]
 
 
 @router.get("/{medication_id}", response_model=MedicationResponse)
-async def get_medication(medication_id: int):
+async def get_medication(medication_id: int, db: Session = Depends(get_db)):
     """
     Получить информацию о лекарстве
     """
-    pass
+    medication = db.get(db_models.Medication, medication_id)
+    if not medication:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Лекарство не найдено")
+    return MedicationResponse(
+        id=medication.id,
+        name=medication.name,
+        quantity=medication.quantity,
+        dosage=medication.dosage,
+        description=medication.description,
+        take_with_food=medication.take_with_food,
+    )
 
 
 @router.post("/", response_model=MedicationResponse)
-async def create_medication(medication_data: CreateMedicationRequest):
+async def create_medication(
+    medication_data: CreateMedicationRequest,
+    user_id_header: int | None = Header(default=None, alias="X-User-Id"),
+    db: Session = Depends(get_db),
+):
     """
     Создать новое лекарство
     """
-    pass
+    user_id = user_id_header or DEFAULT_USER_ID
+    user = db.get(db_models.User, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
+    if medication_data.take_with_food and medication_data.take_with_food not in {"before", "with", "after"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="take_with_food должен быть одним из ['before', 'with', 'after']",
+        )
+    medication = db_models.Medication(
+        user_id=user_id,
+        name=medication_data.name,
+        quantity=medication_data.quantity,
+        dosage=medication_data.dosage,
+        description=medication_data.description,
+        take_with_food=medication_data.take_with_food,
+    )
+    db.add(medication)
+    db.commit()
+    db.refresh(medication)
+    return MedicationResponse(
+        id=medication.id,
+        name=medication.name,
+        quantity=medication.quantity,
+        dosage=medication.dosage,
+        description=medication.description,
+        take_with_food=medication.take_with_food,
+    )
 
 
 @router.put("/{medication_id}", response_model=MedicationResponse)
 async def update_medication(
     medication_id: int,
-    medication_data: UpdateMedicationRequest
+    medication_data: UpdateMedicationRequest,
+    db: Session = Depends(get_db),
 ):
     """
     Обновить информацию о лекарстве
     """
-    pass
+    medication = db.get(db_models.Medication, medication_id)
+    if not medication:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Лекарство не найдено")
+    if medication_data.take_with_food and medication_data.take_with_food not in {"before", "with", "after"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="take_with_food должен быть одним из ['before', 'with', 'after']",
+        )
+    for field in ["name", "quantity", "dosage", "description", "take_with_food"]:
+        value = getattr(medication_data, field)
+        if value is not None:
+            setattr(medication, field, value)
+    db.commit()
+    db.refresh(medication)
+    return MedicationResponse(
+        id=medication.id,
+        name=medication.name,
+        quantity=medication.quantity,
+        dosage=medication.dosage,
+        description=medication.description,
+        take_with_food=medication.take_with_food,
+    )
 
 
 @router.delete("/{medication_id}")
@@ -75,4 +143,9 @@ async def delete_medication(medication_id: int):
     """
     Удалить лекарство
     """
-    pass
+    medication = db.get(db_models.Medication, medication_id)
+    if not medication:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Лекарство не найдено")
+    db.delete(medication)
+    db.commit()
+    return {"status": "deleted", "medication_id": medication_id}

@@ -1,45 +1,21 @@
-from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, Field
+from datetime import date, datetime, time
 from typing import List, Optional
-from datetime import date, time
+
+from fastapi import APIRouter, Header, HTTPException, Query, status, Depends
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.models import db_models
+from app.schemas.appointments import (
+    AppointmentsCalendarResponse,
+    AppointmentResponse,
+    CreateAppointmentRequest,
+    DailyAppointmentsResponse,
+    UpdateAppointmentStatusRequest,
+)
 
 router = APIRouter(prefix="/appointments", tags=["Appointments"])
-
-
-class CreateAppointmentRequest(BaseModel):
-    medication_id: int = Field(..., description="ID лекарства")
-    start_date: date = Field(..., description="Начало приема")
-    end_date: date = Field(..., description="Конец приема")
-    times: List[str] = Field(..., description="Список времен приема в формате HH:MM")
-    period_type: str = Field(..., description="Период приема: daily/every_other_day")
-
-
-class UpdateAppointmentStatusRequest(BaseModel):
-    appointment_id: int = Field(..., description="ID приема")
-    status: str = Field(..., description="Статус: pending/taken/skipped")
-
-
-class AppointmentResponse(BaseModel):
-    id: int
-    medication_id: int
-    medication_name: str
-    date: date
-    time: str
-    status: str
-
-
-class DailyAppointmentsResponse(BaseModel):
-    date: date
-    appointments: List[AppointmentResponse]
-    stats: dict  # {"pending": 1, "taken": 2, "skipped": 1, "total": 4}
-
-
-class AppointmentsCalendarResponse(BaseModel):
-    current_date: date
-    selected_date: date
-    total_appointments: int
-    completed_today: str  # "1/4"
-    appointments: List[AppointmentResponse]
+DEFAULT_USER_ID = 1
 
 
 # Endpoints
@@ -48,34 +24,145 @@ async def get_appointments_calendar(
     user_id: int,
     selected_date: Optional[date] = None,
     view_type: str = Query("month", description="month/week"),
-    selected_family_member: Optional[int] = None
+    selected_family_member: Optional[int] = None,
+    db: Session = Depends(get_db),
 ):
     """
     Получить календарь приемов
     view_type: month (месяц) или week (неделя)
     selected_family_member: ID члена семьи для отображения его приемов
     """
-    pass
+    if view_type not in {"month", "week"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="view_type должен быть month или week",
+        )
+    current = selected_date or date.today()
+    appointments = (
+        db.query(db_models.Appointment)
+        .filter(db_models.Appointment.user_id == user_id)
+        .filter(db_models.Appointment.date == current)
+        .filter(
+            db_models.Appointment.family_member_id == selected_family_member
+            if selected_family_member
+            else True
+        )
+        .all()
+    )
+    total = len(appointments)
+    completed = len([a for a in appointments if a.status == "taken"])
+    return AppointmentsCalendarResponse(
+        current_date=current,
+        selected_date=current,
+        total_appointments=total,
+        completed_today=f"{completed}/{total or 0}",
+        appointments=[
+            AppointmentResponse(
+                id=a.id,
+                medication_id=a.medication_id,
+                medication_name=a.medication.name if a.medication else "",
+                date=a.date,
+                time=a.time.strftime("%H:%M"),
+                status=a.status,
+                family_member_id=a.family_member_id,
+            )
+            for a in appointments
+        ],
+    )
 
 
 @router.get("/day/{date}", response_model=DailyAppointmentsResponse)
 async def get_day_appointments(
     date: date,
     user_id: int,
-    family_member_id: Optional[int] = None
+    family_member_id: Optional[int] = None,
+    db: Session = Depends(get_db),
 ):
     """
     Получить приемы на конкретный день
     """
-    pass
+    query = db.query(db_models.Appointment).filter(db_models.Appointment.user_id == user_id).filter(
+        db_models.Appointment.date == date
+    )
+    if family_member_id:
+        query = query.filter(db_models.Appointment.family_member_id == family_member_id)
+    appointments = query.all()
+    stats = {"pending": 0, "taken": 0, "skipped": 0}
+    for a in appointments:
+        if a.status in stats:
+            stats[a.status] += 1
+    stats["total"] = len(appointments)
+    return DailyAppointmentsResponse(
+        date=date,
+        appointments=[
+            AppointmentResponse(
+                id=a.id,
+                medication_id=a.medication_id,
+                medication_name=a.medication.name if a.medication else "",
+                date=a.date,
+                time=a.time.strftime("%H:%M"),
+                status=a.status,
+                family_member_id=a.family_member_id,
+            )
+            for a in appointments
+        ],
+        stats=stats,
+    )
 
 
 @router.post("/", response_model=AppointmentResponse)
-async def create_appointment(appointment_data: CreateAppointmentRequest):
+async def create_appointment(appointment_data: CreateAppointmentRequest, db: Session = Depends(get_db)):
     """
     Создать прием лекарства
     """
-    pass
+    medication = db.get(db_models.Medication, appointment_data.medication_id)
+    if not medication:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Лекарство не найдено")
+    if appointment_data.period_type not in {"daily", "every_other_day"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="period_type должен быть одним из ['daily', 'every_other_day']",
+        )
+    # family optional
+    family_member_id = appointment_data.family_member_id
+    if family_member_id:
+        family_member = db.get(db_models.FamilyMember, family_member_id)
+        if not family_member:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Член семьи не найден")
+
+    step = 1 if appointment_data.period_type == "daily" else 2
+    current = appointment_data.start_date
+    last_created = None
+    while current <= appointment_data.end_date:
+        for tm in appointment_data.times:
+            try:
+                parsed_time = datetime.strptime(tm, "%H:%M").time()
+            except ValueError:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный формат времени HH:MM")
+            appointment = db_models.Appointment(
+                user_id=medication.user_id,
+                medication_id=medication.id,
+                family_member_id=family_member_id,
+                date=current,
+                time=parsed_time,
+                status="pending",
+            )
+            db.add(appointment)
+            last_created = appointment
+        current = current + timedelta(days=step)
+    db.commit()
+    if last_created:
+        db.refresh(last_created)
+        return AppointmentResponse(
+            id=last_created.id,
+            medication_id=last_created.medication_id,
+            medication_name=medication.name,
+            date=last_created.date,
+            time=last_created.time.strftime("%H:%M"),
+            status=last_created.status,
+            family_member_id=last_created.family_member_id,
+        )
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Приемы не были созданы")
 
 
 @router.put("/status", response_model=AppointmentResponse)
@@ -84,7 +171,26 @@ async def update_appointment_status(status_data: UpdateAppointmentStatusRequest)
     Обновить статус приема
     Статусы: pending (предстоит), taken (принял), skipped (не принял)
     """
-    pass
+    if status_data.status not in {"pending", "taken", "skipped"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="status должен быть одним из ['pending', 'taken', 'skipped']",
+        )
+    appointment = db.get(db_models.Appointment, status_data.appointment_id)
+    if not appointment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Прием не найден")
+    appointment.status = status_data.status
+    db.commit()
+    db.refresh(appointment)
+    return AppointmentResponse(
+        id=appointment.id,
+        medication_id=appointment.medication_id,
+        medication_name=appointment.medication.name if appointment.medication else "",
+        date=appointment.date,
+        time=appointment.time.strftime("%H:%M"),
+        status=appointment.status,
+        family_member_id=appointment.family_member_id,
+    )
 
 
 @router.delete("/{appointment_id}")
@@ -92,7 +198,12 @@ async def delete_appointment(appointment_id: int):
     """
     Удалить прием
     """
-    pass
+    appointment = db.get(db_models.Appointment, appointment_id)
+    if not appointment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Прием не найден")
+    db.delete(appointment)
+    db.commit()
+    return {"status": "deleted", "appointment_id": appointment_id}
 
 
 @router.get("/pdf")
@@ -105,4 +216,23 @@ async def print_appointments_pdf(
     """
     Печать списка приемов в PDF формате
     """
-    pass
+    query = db.query(db_models.Appointment).filter(db_models.Appointment.user_id == user_id)
+    if family_member_id:
+        query = query.filter(db_models.Appointment.family_member_id == family_member_id)
+    appointments = query.filter(db_models.Appointment.date.between(start_date, end_date)).all()
+    return {
+        "message": "PDF генерация упрощена для лабораторной работы",
+        "count": len(appointments),
+        "appointments": [
+            {
+                "id": a.id,
+                "medication_id": a.medication_id,
+                "medication_name": a.medication.name if a.medication else "",
+                "family_member_id": a.family_member_id,
+                "date": a.date.isoformat(),
+                "time": a.time.strftime("%H:%M"),
+                "status": a.status,
+            }
+            for a in appointments
+        ],
+    }

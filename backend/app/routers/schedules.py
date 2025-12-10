@@ -1,44 +1,18 @@
-from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from datetime import time as dt_time
 from typing import List
-from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.models import db_models
+from app.schemas.schedules import CreateScheduleRequest, MedicationScheduleResponse, TimeSlotResponse
 
 router = APIRouter(prefix="/schedules", tags=["Schedules"])
 
 
-class CreateTimeSlotRequest(BaseModel):
-    hour: int = Field(..., description="Час", ge=0, le=23)
-    minute: int = Field(..., description="Минуты", ge=0, le=59)
-
-
-class CreateScheduleRequest(BaseModel):
-    medication_id: int = Field(..., description="ID лекарства")
-    family_member_id: int = Field(..., description="ID члена семьи")
-    start_date: date = Field(..., description="Начало приема")
-    end_date: date = Field(..., description="Конец приема")
-    time_slots: List[CreateTimeSlotRequest] = Field(..., description="Список времен приема")
-    period_type: str = Field(..., description="daily/every_other_day - каждый день/через день")
-
-
-class TimeSlotResponse(BaseModel):
-    id: int
-    time: str
-
-
-class MedicationScheduleResponse(BaseModel):
-    id: int
-    medication_id: int
-    medication_name: str
-    family_member_id: int
-    family_member_name: str
-    start_date: date
-    end_date: date
-    time_slots: List[TimeSlotResponse]
-    period_type: str
-
-
 @router.post("/", response_model=MedicationScheduleResponse)
-async def create_schedule(schedule_data: CreateScheduleRequest):
+async def create_schedule(schedule_data: CreateScheduleRequest, db: Session = Depends(get_db)):
     """
     Создать расписание приема лекарства
     
@@ -46,20 +20,91 @@ async def create_schedule(schedule_data: CreateScheduleRequest):
     - daily: каждый день
     - every_other_day: через день
     """
-    pass
+    if schedule_data.period_type not in {"daily", "every_other_day"}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="period_type должен быть одним из ['daily', 'every_other_day']",
+        )
+    medication = db.get(db_models.Medication, schedule_data.medication_id)
+    if not medication:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Лекарство не найдено")
+    family_member = db.get(db_models.FamilyMember, schedule_data.family_member_id)
+    if not family_member:
+        # prefer clear message without leaking internals
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Член семьи не найден",
+        )
+
+    schedule = db_models.Schedule(
+        medication_id=medication.id,
+        family_member_id=family_member.id,
+        start_date=schedule_data.start_date,
+        end_date=schedule_data.end_date,
+        period_type=schedule_data.period_type,
+    )
+    db.add(schedule)
+    db.commit()
+    db.refresh(schedule)
+
+    slots = []
+    for slot in schedule_data.time_slots:
+        slot_time = dt_time(hour=slot.hour, minute=slot.minute)
+        time_slot = db_models.TimeSlot(schedule_id=schedule.id, time=slot_time)
+        db.add(time_slot)
+        slots.append(time_slot)
+    db.commit()
+    for slot in slots:
+        db.refresh(slot)
+
+    return MedicationScheduleResponse(
+        id=schedule.id,
+        medication_id=schedule.medication_id,
+        medication_name=medication.name,
+        family_member_id=schedule.family_member_id,
+        family_member_name=family_member.name,
+        start_date=schedule.start_date,
+        end_date=schedule.end_date,
+        time_slots=[TimeSlotResponse(id=slot.id, time=slot.time.strftime("%H:%M")) for slot in slots],
+        period_type=schedule.period_type,
+    )
 
 
 @router.get("/", response_model=List[MedicationScheduleResponse])
-async def get_schedules(family_member_id: int):
+async def get_schedules(family_member_id: int, db: Session = Depends(get_db)):
     """
     Получить список расписаний для члена семьи
     """
-    pass
+    schedules = db.query(db_models.Schedule).filter_by(family_member_id=family_member_id).all()
+    response = []
+    for schedule in schedules:
+        medication = db.get(db_models.Medication, schedule.medication_id)
+        member = db.get(db_models.FamilyMember, schedule.family_member_id)
+        time_slots = db.query(db_models.TimeSlot).filter_by(schedule_id=schedule.id).all()
+        response.append(
+            MedicationScheduleResponse(
+                id=schedule.id,
+                medication_id=schedule.medication_id,
+                medication_name=medication.name if medication else "Unknown",
+                family_member_id=schedule.family_member_id,
+                family_member_name=member.name if member else "Unknown",
+                start_date=schedule.start_date,
+                end_date=schedule.end_date,
+                time_slots=[TimeSlotResponse(id=slot.id, time=slot.time.strftime("%H:%M")) for slot in time_slots],
+                period_type=schedule.period_type,
+            )
+        )
+    return response
 
 
 @router.delete("/{schedule_id}")
-async def delete_schedule(schedule_id: int):
+async def delete_schedule(schedule_id: int, db: Session = Depends(get_db)):
     """
     Удалить расписание
     """
-    pass
+    schedule = db.get(db_models.Schedule, schedule_id)
+    if not schedule:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Расписание не найдено")
+    db.delete(schedule)
+    db.commit()
+    return {"status": "deleted", "schedule_id": schedule_id}

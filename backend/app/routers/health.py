@@ -1,6 +1,9 @@
 from fastapi import APIRouter, status
 from pydantic import BaseModel
 from datetime import datetime
+from sqlalchemy.exc import SQLAlchemyError
+
+from app.database import engine
 
 router = APIRouter()
 
@@ -28,15 +31,20 @@ async def detailed_health_check():
     """
     Подробный health check с информацией о системе
     """
-    # TODO: Добавить проверку подключения к БД
-    # TODO: Добавить проверку других зависимостей
-    
+    db_status = "unknown"
+    try:
+        with engine.connect() as conn:
+            conn.execute("SELECT 1")
+            db_status = "connected"
+    except SQLAlchemyError:
+        db_status = "error"
+
     return {
         "status": "healthy",
         "timestamp": datetime.now().isoformat(),
         "service": "fullstack-api",
         "components": {
-            "database": "connected",
+            "database": db_status,
             "api": "running"
         }
     }
