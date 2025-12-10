@@ -12,8 +12,9 @@ class RegisterRequest(BaseModel):
     name: str = Field(..., description="Имя пользователя")
 
 
-class TokenResponse(BaseModel):
+class TokenPairResponse(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
     user_id: int
 
@@ -22,4 +23,8 @@ class UserResponse(BaseModel):
     id: int
     phone: str
     name: str
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
 

@@ -1,16 +1,30 @@
-from fastapi import APIRouter, Header, HTTPException, status, Depends
+from datetime import datetime, timedelta, timezone
+
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from jose import JWTError
 from sqlalchemy.orm import Session
 
-from app.utils.security import create_access_token, decode_token, get_password_hash, verify_password
+from app.utils.security import (
+    create_access_token,
+    create_refresh_token,
+    decode_token,
+    get_password_hash,
+    verify_password,
+)
 from app.database import get_db
 from app.models import db_models
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
+from app.schemas.auth import (
+    LoginRequest,
+    RefreshRequest,
+    RegisterRequest,
+    TokenPairResponse,
+    UserResponse,
+)
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=TokenPairResponse)
 async def login(credentials: LoginRequest, db: Session = Depends(get_db)):
     """
     Вход в систему
@@ -23,8 +37,18 @@ async def login(credentials: LoginRequest, db: Session = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Неверный телефон или пароль",
         )
-    token = create_access_token({"sub": str(user.id)})
-    return TokenResponse(access_token=token, user_id=user.id)
+    access = create_access_token({"sub": str(user.id)})
+    refresh = create_refresh_token({"sub": str(user.id)})
+
+    db_refresh = db_models.RefreshToken(
+        user_id=user.id,
+        token=refresh,
+        expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+        revoked=False,
+    )
+    db.add(db_refresh)
+    db.commit()
+    return TokenPairResponse(access_token=access, refresh_token=refresh, user_id=user.id)
 
 
 @router.post("/register", response_model=UserResponse)
@@ -52,37 +76,44 @@ async def register(user_data: RegisterRequest, db: Session = Depends(get_db)):
     return UserResponse(id=user.id, phone=user.phone, name=user.name)
 
 
-@router.post("/refresh", response_model=TokenResponse)
-async def refresh_token(
-    authorization: str = Header(None, alias="Authorization"), db: Session = Depends(get_db)
-):
+@router.post("/refresh", response_model=TokenPairResponse)
+async def refresh_token(data: RefreshRequest, db: Session = Depends(get_db)):
     """
     Обновление токена
     """
-    if not authorization or not authorization.lower().startswith("bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Токен не найден",
-        )
-    token = authorization.split(" ", 1)[1]
-    payload = decode_token(token)
-    if not payload or "sub" not in payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Неверный токен",
-        )
+    payload = decode_token(data.refresh_token)
+    if not payload or payload.get("type") != "refresh" or "sub" not in payload:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный refresh-токен")
+
+    token_row = (
+        db.query(db_models.RefreshToken)
+        .filter(db_models.RefreshToken.token == data.refresh_token, db_models.RefreshToken.revoked.is_(False))
+        .first()
+    )
+    if not token_row or token_row.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh-токен истек или отозван")
+
     try:
         user_id = int(payload["sub"])
     except (ValueError, TypeError, JWTError):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Неверный токен",
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный токен")
+
     user = db.get(db_models.User, user_id)
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Пользователь не найден",
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
+
+    # rotate refresh
+    token_row.revoked = True
+    new_refresh = create_refresh_token({"sub": str(user.id)})
+    new_access = create_access_token({"sub": str(user.id)})
+    db.add(
+        db_models.RefreshToken(
+            user_id=user.id,
+            token=new_refresh,
+            expires_at=datetime.now(timezone.utc) + timedelta(days=7),
+            revoked=False,
         )
-    new_token = create_access_token({"sub": str(user.id)})
-    return TokenResponse(access_token=new_token, user_id=user.id)
+    )
+    db.commit()
+
+    return TokenPairResponse(access_token=new_access, refresh_token=new_refresh, user_id=user.id)

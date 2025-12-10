@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.dependencies.auth import get_current_user
 from app.models import db_models
 from app.schemas.schedules import CreateScheduleRequest, MedicationScheduleResponse, TimeSlotResponse
 
@@ -12,7 +13,11 @@ router = APIRouter(prefix="/schedules", tags=["Schedules"])
 
 
 @router.post("/", response_model=MedicationScheduleResponse)
-async def create_schedule(schedule_data: CreateScheduleRequest, db: Session = Depends(get_db)):
+async def create_schedule(
+    schedule_data: CreateScheduleRequest,
+    db: Session = Depends(get_db),
+    current_user: db_models.User = Depends(get_current_user),
+):
     """
     Создать расписание приема лекарства
     
@@ -28,8 +33,10 @@ async def create_schedule(schedule_data: CreateScheduleRequest, db: Session = De
     medication = db.get(db_models.Medication, schedule_data.medication_id)
     if not medication:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Лекарство не найдено")
+    if medication.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нельзя создавать расписание для чужого лекарства")
     family_member = db.get(db_models.FamilyMember, schedule_data.family_member_id)
-    if not family_member:
+    if not family_member or family_member.user_id != current_user.id:
         # prefer clear message without leaking internals
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -71,11 +78,21 @@ async def create_schedule(schedule_data: CreateScheduleRequest, db: Session = De
 
 
 @router.get("/", response_model=List[MedicationScheduleResponse])
-async def get_schedules(family_member_id: int, db: Session = Depends(get_db)):
+async def get_schedules(
+    family_member_id: int,
+    db: Session = Depends(get_db),
+    current_user: db_models.User = Depends(get_current_user),
+):
     """
     Получить список расписаний для члена семьи
     """
-    schedules = db.query(db_models.Schedule).filter_by(family_member_id=family_member_id).all()
+    schedules = (
+        db.query(db_models.Schedule)
+        .join(db_models.FamilyMember, db_models.FamilyMember.id == db_models.Schedule.family_member_id)
+        .filter(db_models.FamilyMember.user_id == current_user.id)
+        .filter(db_models.Schedule.family_member_id == family_member_id)
+        .all()
+    )
     response = []
     for schedule in schedules:
         medication = db.get(db_models.Medication, schedule.medication_id)
@@ -98,13 +115,18 @@ async def get_schedules(family_member_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/{schedule_id}")
-async def delete_schedule(schedule_id: int, db: Session = Depends(get_db)):
+async def delete_schedule(
+    schedule_id: int, db: Session = Depends(get_db), current_user: db_models.User = Depends(get_current_user)
+):
     """
     Удалить расписание
     """
     schedule = db.get(db_models.Schedule, schedule_id)
     if not schedule:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Расписание не найдено")
+    owner = db.get(db_models.FamilyMember, schedule.family_member_id)
+    if not owner or owner.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нельзя удалять чужое расписание")
     db.delete(schedule)
     db.commit()
     return {"status": "deleted", "schedule_id": schedule_id}

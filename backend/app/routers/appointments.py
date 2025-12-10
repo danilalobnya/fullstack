@@ -1,10 +1,11 @@
-from datetime import date, datetime, time
-from typing import List, Optional
+from datetime import date, datetime, timedelta
+from typing import Optional
 
-from fastapi import APIRouter, Header, HTTPException, Query, status, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.dependencies.auth import get_current_user
 from app.models import db_models
 from app.schemas.appointments import (
     AppointmentsCalendarResponse,
@@ -15,7 +16,6 @@ from app.schemas.appointments import (
 )
 
 router = APIRouter(prefix="/appointments", tags=["Appointments"])
-DEFAULT_USER_ID = 1
 
 
 # Endpoints
@@ -26,6 +26,7 @@ async def get_appointments_calendar(
     view_type: str = Query("month", description="month/week"),
     selected_family_member: Optional[int] = None,
     db: Session = Depends(get_db),
+    current_user: db_models.User = Depends(get_current_user),
 ):
     """
     Получить календарь приемов
@@ -38,9 +39,10 @@ async def get_appointments_calendar(
             detail="view_type должен быть month или week",
         )
     current = selected_date or date.today()
+    target_user_id = user_id or current_user.id
     appointments = (
         db.query(db_models.Appointment)
-        .filter(db_models.Appointment.user_id == user_id)
+        .filter(db_models.Appointment.user_id == target_user_id)
         .filter(db_models.Appointment.date == current)
         .filter(
             db_models.Appointment.family_member_id == selected_family_member
@@ -77,11 +79,13 @@ async def get_day_appointments(
     user_id: int,
     family_member_id: Optional[int] = None,
     db: Session = Depends(get_db),
+    current_user: db_models.User = Depends(get_current_user),
 ):
     """
     Получить приемы на конкретный день
     """
-    query = db.query(db_models.Appointment).filter(db_models.Appointment.user_id == user_id).filter(
+    target_user_id = user_id or current_user.id
+    query = db.query(db_models.Appointment).filter(db_models.Appointment.user_id == target_user_id).filter(
         db_models.Appointment.date == date
     )
     if family_member_id:
@@ -111,13 +115,19 @@ async def get_day_appointments(
 
 
 @router.post("/", response_model=AppointmentResponse)
-async def create_appointment(appointment_data: CreateAppointmentRequest, db: Session = Depends(get_db)):
+async def create_appointment(
+    appointment_data: CreateAppointmentRequest,
+    db: Session = Depends(get_db),
+    current_user: db_models.User = Depends(get_current_user),
+):
     """
     Создать прием лекарства
     """
     medication = db.get(db_models.Medication, appointment_data.medication_id)
     if not medication:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Лекарство не найдено")
+    if medication.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нельзя создавать приемы для чужого лекарства")
     if appointment_data.period_type not in {"daily", "every_other_day"}:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -127,7 +137,7 @@ async def create_appointment(appointment_data: CreateAppointmentRequest, db: Ses
     family_member_id = appointment_data.family_member_id
     if family_member_id:
         family_member = db.get(db_models.FamilyMember, family_member_id)
-        if not family_member:
+        if not family_member or family_member.user_id != current_user.id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Член семьи не найден")
 
     step = 1 if appointment_data.period_type == "daily" else 2
@@ -140,7 +150,7 @@ async def create_appointment(appointment_data: CreateAppointmentRequest, db: Ses
             except ValueError:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Неверный формат времени HH:MM")
             appointment = db_models.Appointment(
-                user_id=medication.user_id,
+                user_id=current_user.id,
                 medication_id=medication.id,
                 family_member_id=family_member_id,
                 date=current,
@@ -166,7 +176,11 @@ async def create_appointment(appointment_data: CreateAppointmentRequest, db: Ses
 
 
 @router.put("/status", response_model=AppointmentResponse)
-async def update_appointment_status(status_data: UpdateAppointmentStatusRequest):
+async def update_appointment_status(
+    status_data: UpdateAppointmentStatusRequest,
+    db: Session = Depends(get_db),
+    current_user: db_models.User = Depends(get_current_user),
+):
     """
     Обновить статус приема
     Статусы: pending (предстоит), taken (принял), skipped (не принял)
@@ -179,6 +193,8 @@ async def update_appointment_status(status_data: UpdateAppointmentStatusRequest)
     appointment = db.get(db_models.Appointment, status_data.appointment_id)
     if not appointment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Прием не найден")
+    if appointment.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нельзя изменять чужой прием")
     appointment.status = status_data.status
     db.commit()
     db.refresh(appointment)
@@ -194,13 +210,19 @@ async def update_appointment_status(status_data: UpdateAppointmentStatusRequest)
 
 
 @router.delete("/{appointment_id}")
-async def delete_appointment(appointment_id: int):
+async def delete_appointment(
+    appointment_id: int,
+    db: Session = Depends(get_db),
+    current_user: db_models.User = Depends(get_current_user),
+):
     """
     Удалить прием
     """
     appointment = db.get(db_models.Appointment, appointment_id)
     if not appointment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Прием не найден")
+    if appointment.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нельзя удалять чужой прием")
     db.delete(appointment)
     db.commit()
     return {"status": "deleted", "appointment_id": appointment_id}
@@ -211,12 +233,15 @@ async def print_appointments_pdf(
     user_id: int,
     start_date: date,
     end_date: date,
-    family_member_id: Optional[int] = None
+    family_member_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: db_models.User = Depends(get_current_user),
 ):
     """
     Печать списка приемов в PDF формате
     """
-    query = db.query(db_models.Appointment).filter(db_models.Appointment.user_id == user_id)
+    target_user_id = user_id or current_user.id
+    query = db.query(db_models.Appointment).filter(db_models.Appointment.user_id == target_user_id)
     if family_member_id:
         query = query.filter(db_models.Appointment.family_member_id == family_member_id)
     appointments = query.filter(db_models.Appointment.date.between(start_date, end_date)).all()

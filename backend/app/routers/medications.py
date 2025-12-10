@@ -1,17 +1,13 @@
-from fastapi import APIRouter, Header, HTTPException, Query, status, Depends
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from typing import List, Optional
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.dependencies.auth import get_current_user
 from app.models import db_models
-from app.schemas.medications import (
-    CreateMedicationRequest,
-    MedicationResponse,
-    UpdateMedicationRequest,
-)
+from app.schemas.medications import CreateMedicationRequest, MedicationResponse, UpdateMedicationRequest
 
 router = APIRouter(prefix="/medications", tags=["Medications"])
-DEFAULT_USER_ID = 1
 
 
 @router.get("/", response_model=List[MedicationResponse])
@@ -20,15 +16,13 @@ async def get_medications(
     user_id: Optional[int] = None,
     user_id_header: int | None = Header(default=None, alias="X-User-Id"),
     db: Session = Depends(get_db),
+    current_user: db_models.User = Depends(get_current_user),
 ):
     """
     Получить список лекарств
     Поиск по названию через параметр search
     """
-    target_user_id = user_id or user_id_header or DEFAULT_USER_ID
-    user = db.get(db_models.User, target_user_id)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
+    target_user_id = user_id or user_id_header or current_user.id
 
     query = db.query(db_models.Medication).filter(db_models.Medication.user_id == target_user_id)
     if search:
@@ -49,7 +43,9 @@ async def get_medications(
 
 
 @router.get("/{medication_id}", response_model=MedicationResponse)
-async def get_medication(medication_id: int, db: Session = Depends(get_db)):
+async def get_medication(
+    medication_id: int, db: Session = Depends(get_db), current_user: db_models.User = Depends(get_current_user)
+):
     """
     Получить информацию о лекарстве
     """
@@ -71,14 +67,12 @@ async def create_medication(
     medication_data: CreateMedicationRequest,
     user_id_header: int | None = Header(default=None, alias="X-User-Id"),
     db: Session = Depends(get_db),
+    current_user: db_models.User = Depends(get_current_user),
 ):
     """
     Создать новое лекарство
     """
-    user_id = user_id_header or DEFAULT_USER_ID
-    user = db.get(db_models.User, user_id)
-    if not user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Пользователь не найден")
+    user_id = user_id_header or current_user.id
     if medication_data.take_with_food and medication_data.take_with_food not in {"before", "with", "after"}:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -110,6 +104,7 @@ async def update_medication(
     medication_id: int,
     medication_data: UpdateMedicationRequest,
     db: Session = Depends(get_db),
+    current_user: db_models.User = Depends(get_current_user),
 ):
     """
     Обновить информацию о лекарстве
@@ -117,6 +112,8 @@ async def update_medication(
     medication = db.get(db_models.Medication, medication_id)
     if not medication:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Лекарство не найдено")
+    if medication.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нельзя изменять чужое лекарство")
     if medication_data.take_with_food and medication_data.take_with_food not in {"before", "with", "after"}:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -139,13 +136,17 @@ async def update_medication(
 
 
 @router.delete("/{medication_id}")
-async def delete_medication(medication_id: int):
+async def delete_medication(
+    medication_id: int, db: Session = Depends(get_db), current_user: db_models.User = Depends(get_current_user)
+):
     """
     Удалить лекарство
     """
     medication = db.get(db_models.Medication, medication_id)
     if not medication:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Лекарство не найдено")
+    if medication.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нельзя удалять чужое лекарство")
     db.delete(medication)
     db.commit()
     return {"status": "deleted", "medication_id": medication_id}

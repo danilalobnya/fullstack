@@ -1,6 +1,6 @@
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, Column, Date, ForeignKey, Integer, String, Time
+from sqlalchemy import Boolean, Column, Date, ForeignKey, Integer, String, Time, DateTime
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -17,6 +17,7 @@ class User(Base):
 
     family_members = relationship("FamilyMember", back_populates="user", cascade="all, delete")
     medications = relationship("Medication", back_populates="user", cascade="all, delete")
+    refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete")
 
 
 class FamilyMember(Base):
@@ -88,4 +89,16 @@ class TimeSlot(Base):
     time = Column(Time, nullable=False)
 
     schedule = relationship("Schedule", back_populates="time_slots")
+
+
+class RefreshToken(Base):
+    __tablename__ = "refresh_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    token = Column(String, unique=True, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    revoked = Column(Boolean, default=False)
+
+    user = relationship("User", back_populates="refresh_tokens")
 

@@ -17,10 +17,23 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def create_access_token(data: Dict[str, Any], expires_minutes: int = settings.access_token_expire_minutes) -> str:
+def create_access_token(
+    data: Dict[str, Any],
+    expires_minutes: int = settings.access_token_expire_minutes,
+) -> str:
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "type": "access"})
+    return jwt.encode(to_encode, settings.secret_key, algorithm="HS256")
+
+
+def create_refresh_token(
+    data: Dict[str, Any],
+    expires_days: int = 7,
+) -> str:
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(days=expires_days)
+    to_encode.update({"exp": expire, "type": "refresh"})
     return jwt.encode(to_encode, settings.secret_key, algorithm="HS256")
 
 
