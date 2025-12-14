@@ -1,19 +1,22 @@
-import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import Calendar from '../components/Calendar'
 import BottomNav from '../components/BottomNav'
+import api from '../services/api'
 import './MedicationSchedule.css'
 
 function MedicationSchedule() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const [selectedMedication, setSelectedMedication] = useState({ id: 1, name: 'Коллаген морской, 1 капсула' })
+  const [selectedMedication, setSelectedMedication] = useState(null)
   const [medications, setMedications] = useState([])
   const [selectedDates, setSelectedDates] = useState([])
   const [selectedTimes, setSelectedTimes] = useState([])
   const [periodType, setPeriodType] = useState('daily') // daily или every_other_day
   const [viewType, setViewType] = useState('day')
-  const [currentDate, setCurrentDate] = useState(new Date(2025, 9, 10))
+  const [currentDate, setCurrentDate] = useState(new Date())
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
 
   const monthNames = [
     'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
@@ -26,19 +29,50 @@ function MedicationSchedule() {
     timeSlots.push(`${hour.toString().padStart(2, '0')}:00`)
   }
 
-  useEffect(() => {
-    // TODO: Загрузить список лекарств из API
-    setMedications([
-      { id: 1, name: 'Коллаген морской, 1 капсула' },
-      { id: 2, name: 'Магния цитрат, 2 таблетки' },
-      { id: 3, name: 'Omega-3, 1 капсула' }
-    ])
+  const formatDate = (date) => date.toISOString().split('T')[0]
 
-    // Загрузить выбранное лекарство
-    if (id) {
-      const med = medications.find(m => m.id === parseInt(id))
-      if (med) setSelectedMedication(med)
+  useEffect(() => {
+    const loadMedications = async () => {
+      setLoading(true)
+      setError('')
+      try {
+        const token = localStorage.getItem('access_token')
+        if (!token) {
+          setError('Авторизуйтесь заново')
+          setLoading(false)
+          return
+        }
+
+        const base = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+        const url = new URL(`${base}/medications/`, window.location.origin)
+
+        const response = await fetch(url.toString(), {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          credentials: 'include',
+        })
+
+        if (!response.ok) {
+          throw new Error('failed')
+        }
+
+        const data = await response.json()
+        setMedications(data)
+        if (id) {
+          const med = data.find((m) => m.id === parseInt(id, 10))
+          if (med) setSelectedMedication(med)
+        } else if (data.length > 0) {
+          setSelectedMedication(data[0])
+        }
+      } catch (err) {
+        setError('Не удалось загрузить список лекарств')
+      } finally {
+        setLoading(false)
+      }
     }
+    loadMedications()
   }, [id])
 
   const handleDateClick = (date) => {
@@ -76,7 +110,11 @@ function MedicationSchedule() {
     }
   }
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (!selectedMedication) {
+      alert('Выберите лекарство')
+      return
+    }
     if (selectedDates.length === 0) {
       alert('Выберите хотя бы одну дату')
       return
@@ -86,16 +124,42 @@ function MedicationSchedule() {
       return
     }
     
-    // TODO: Отправить данные на API
-    console.log('Данные для отправки:', {
-      medication_id: selectedMedication.id,
-      dates: selectedDates,
-      times: selectedTimes,
-      period_type: periodType
-    })
-    
-    alert('Лекарство добавлено в расписание!')
-    navigate('/')
+    try {
+      const token = localStorage.getItem('access_token')
+      if (!token) {
+        setError('Авторизуйтесь заново')
+        return
+      }
+
+      const sortedDates = [...selectedDates].sort((a, b) => a - b)
+      const payload = {
+        medication_id: selectedMedication.id,
+        start_date: formatDate(sortedDates[0]),
+        end_date: formatDate(sortedDates[sortedDates.length - 1]),
+        times: selectedTimes,
+        period_type: periodType,
+      }
+
+      const base = 'http://localhost:8000/api/v1'
+      const response = await fetch(`${base}/appointments/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        throw new Error('failed')
+      }
+
+      alert('Лекарство добавлено в расписание!')
+      navigate('/')
+    } catch (err) {
+      setError('Не удалось сохранить расписание')
+    }
   }
 
   const navigateMonth = (direction) => {
@@ -112,17 +176,30 @@ function MedicationSchedule() {
       </div>
 
       <div className="container">
+        {loading && <div>Загрузка...</div>}
+        {error && <div className="error-message">{error}</div>}
+        {!loading && medications.length === 0 && (
+          <div className="empty-state">
+            <p>Сначала добавьте лекарство в каталоге</p>
+            <button className="btn-primary" onClick={() => navigate('/medications')}>
+              Открыть каталог
+            </button>
+          </div>
+        )}
+
         <div className="medication-selection">
           <div className="selection-banner">Выбор лекарства из списка</div>
           <select 
             className="medication-select"
-            value={selectedMedication.id}
+            value={selectedMedication?.id || ''}
             onChange={(e) => {
-              const med = medications.find(m => m.id === parseInt(e.target.value))
+              const med = medications.find(m => m.id === parseInt(e.target.value, 10))
               if (med) setSelectedMedication(med)
             }}
+            disabled={loading || medications.length === 0}
           >
-            {medications.map(med => (
+            {loading && <option>Загрузка...</option>}
+            {!loading && medications.map(med => (
               <option key={med.id} value={med.id}>{med.name}</option>
             ))}
           </select>
@@ -158,6 +235,8 @@ function MedicationSchedule() {
             currentDate={currentDate}
           />
         </div>
+
+        {error && <div className="error-message">{error}</div>}
 
         <div className="time-selection">
           <h3>Время приема</h3>

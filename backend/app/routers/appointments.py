@@ -18,7 +18,6 @@ from app.schemas.appointments import (
 router = APIRouter(prefix="/appointments", tags=["Appointments"])
 
 
-# Endpoints
 @router.get("/calendar", response_model=AppointmentsCalendarResponse)
 async def get_appointments_calendar(
     user_id: int,

@@ -5,8 +5,6 @@ from pydantic import BaseModel, ConfigDict
 
 
 class BaseEntity(BaseModel):
-    """Base model config shared by all entities."""
-
     model_config = ConfigDict(from_attributes=True)
 
 

@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import api from '../services/api'
 import './CreateMedicationModal.css'
 
-function CreateMedicationModal({ onClose }) {
+function CreateMedicationModal({ onClose, onSaved, medication }) {
   const [formData, setFormData] = useState({
     name: 'Коллаген морской',
     quantity: '1 капсула',
@@ -9,16 +10,66 @@ function CreateMedicationModal({ onClose }) {
     description: '',
     takeWithFood: 'with' // before, with, after
   })
+  const [error, setError] = useState('')
+  const isEditing = !!medication
+
+  useEffect(() => {
+    if (medication) {
+      setFormData({
+        name: medication.name || '',
+        quantity: medication.quantity || '',
+        dosage: medication.dosage || '',
+        description: medication.description || '',
+        takeWithFood: medication.take_with_food || 'with',
+      })
+    }
+  }, [medication])
 
   const quantities = ['1 капсула', '2 капсулы', '1 таблетка', '2 таблетки', '5 мл', '10 мл']
   const dosages = ['100 мг', '200 мг', '500 мг', '1000 мг', '5 мл', '10 мл']
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    // TODO: Отправить данные на API
-    // await api.post('/medications', formData)
-    alert('Лекарство добавлено!')
-    onClose()
+    setError('')
+    const payload = {
+      name: formData.name,
+      quantity: formData.quantity,
+      dosage: formData.dosage,
+      description: formData.description,
+      take_with_food: formData.takeWithFood,
+    }
+
+    try {
+      const token = localStorage.getItem('access_token')
+      if (!token) {
+        setError('Авторизуйтесь заново')
+        return
+      }
+
+      const base = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+      const endpoint = isEditing ? `${base}/medications/${medication.id}` : `${base}/medications/`
+
+      const response = await fetch(endpoint, {
+        method: isEditing ? 'PUT' : 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: 'include',
+        body: JSON.stringify(payload),
+      })
+
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => ({}))
+        throw new Error(errJson.detail || 'failed')
+      }
+
+      const data = await response.json()
+      onSaved?.(data)
+      onClose()
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Не удалось сохранить лекарство')
+    }
   }
 
   return (
@@ -26,6 +77,7 @@ function CreateMedicationModal({ onClose }) {
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <h2>Добавить лекарство</h2>
         <form onSubmit={handleSubmit}>
+          {error && <div className="error-message">{error}</div>}
           <div className="form-group">
             <label>Название лекарства:</label>
             <input
@@ -104,7 +156,7 @@ function CreateMedicationModal({ onClose }) {
               Отмена
             </button>
             <button type="submit" className="btn-primary">
-              Добавить лекарство
+              {isEditing ? 'Сохранить' : 'Добавить лекарство'}
             </button>
           </div>
         </form>

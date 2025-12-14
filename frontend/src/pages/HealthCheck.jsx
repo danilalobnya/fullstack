@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import api from '../services/api'
 import './HealthCheck.css'
 
 function HealthCheck() {
@@ -11,11 +10,14 @@ function HealthCheck() {
     setLoading(true)
     try {
       const [healthRes, detailedRes] = await Promise.all([
-        api.get('/health'),
-        api.get('/health/detailed')
+        fetch('/api/health'),
+        fetch('/api/health/detailed')
       ])
-      setHealthData(healthRes.data)
-      setDetailedHealth(detailedRes.data)
+      if (!healthRes.ok || !detailedRes.ok) throw new Error('Health check failed')
+      const healthJson = await healthRes.json()
+      const detailedJson = await detailedRes.json()
+      setHealthData(healthJson)
+      setDetailedHealth(detailedJson)
     } catch (err) {
       console.error('Ошибка при проверке health:', err)
     } finally {

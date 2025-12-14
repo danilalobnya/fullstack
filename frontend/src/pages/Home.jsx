@@ -1,51 +1,102 @@
-import { useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import Calendar from '../components/Calendar'
 import BottomNav from '../components/BottomNav'
+import api from '../services/api'
 import './Home.css'
 
 function Home() {
+  const navigate = useNavigate()
   const [selectedFamilyMember, setSelectedFamilyMember] = useState(0)
   const [viewType, setViewType] = useState('day') // day или month
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [currentDate, setCurrentDate] = useState(new Date())
+  const [appointments, setAppointments] = useState([])
+  const [stats, setStats] = useState({ pending: 0, taken: 0, skipped: 0, total: 0 })
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [familyMembers, setFamilyMembers] = useState([
+    { id: 0, name: 'Я', icon: '👤' },
+  ])
 
   const monthNames = [
     'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
     'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
   ]
 
-  // Mock данные для приемов на выбранный день
-  const [appointments, setAppointments] = useState([
-    { id: 1, time: '08:00', medication: 'Коллаген морской', dosage: '1 капсула', status: 'taken' },
-    { id: 2, time: '12:00', medication: 'Магния цитрат', dosage: '2 таблетки', status: 'pending' },
-    { id: 3, time: '12:00', medication: 'Omega-3', dosage: '1 капсула', status: 'pending' },
-    { id: 4, time: '22:00', medication: 'Магния цитрат', dosage: '2 таблетки', status: 'skipped' }
-  ])
+  const formatDate = (date) => date.toISOString().split('T')[0]
 
-  // Mock данные для членов семьи
-  const familyMembers = [
-    { id: 0, name: 'Даниил', icon: '👧' },
-    { id: 1, name: 'Мама', icon: '👤' },
-    { id: 2, name: 'Папа', icon: '👤' },
-    { id: 3, name: 'Брат', icon: '👤' },
-    { id: 4, name: 'Сестра', icon: '👤' }
-  ]
-
-  // Вычисляем статистику на сегодня
-  const todayAppointments = appointments.filter(apt => {
-    const aptDate = new Date(selectedDate)
-    aptDate.setHours(0, 0, 0, 0)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    return aptDate.getTime() === today.getTime()
-  })
-
-  const todayStats = {
-    taken: todayAppointments.filter(a => a.status === 'taken').length,
-    skipped: todayAppointments.filter(a => a.status === 'skipped').length,
-    pending: todayAppointments.filter(a => a.status === 'pending').length,
-    total: todayAppointments.length
+  const loadFamilyMembers = async () => {
+    try {
+      const response = await api.get('/users/me/family')
+      const normalized = response.data.map((m) => ({ id: m.id, name: m.name, icon: '👤' }))
+      setFamilyMembers([{ id: 0, name: 'Я', icon: '👤' }, ...normalized])
+    } catch (err) {
+      // fallback to default
+    }
   }
+
+  const loadAppointments = async (date) => {
+    const userId = localStorage.getItem('user_id')
+    if (!userId) {
+      navigate('/login')
+      return
+    }
+    setLoading(true)
+    setError('')
+    try {
+      const token = localStorage.getItem('access_token')
+      if (!token) {
+        setError('Авторизуйтесь заново')
+        setLoading(false)
+        return
+      }
+
+      const dateStr = formatDate(date)
+      const params = new URLSearchParams({
+        user_id: userId,
+      })
+      if (selectedFamilyMember) {
+        params.append('family_member_id', selectedFamilyMember)
+      }
+
+      const base = 'http://localhost:8000/api/v1'
+      const response = await fetch(`${base}/appointments/day/${dateStr}?${params.toString()}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: 'include',
+      })
+
+      if (!response.ok) {
+        throw new Error('failed')
+      }
+
+      const data = await response.json()
+      const fetched = data.appointments.map((a) => ({
+        id: a.id,
+        time: a.time,
+        medication: a.medication_name,
+        dosage: '',
+        status: a.status,
+      }))
+      setAppointments(fetched)
+      setStats(data.stats || { pending: 0, taken: 0, skipped: 0, total: 0 })
+    } catch (err) {
+      setError('Не удалось загрузить приемы. Попробуйте обновить страницу.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadFamilyMembers()
+  }, [])
+
+  useEffect(() => {
+    loadAppointments(selectedDate)
+  }, [selectedDate, selectedFamilyMember])
 
   const getDayName = (date) => {
     const days = ['Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота']
@@ -60,12 +111,89 @@ function Home() {
     return months[date.getMonth()]
   }
 
-  const handleStatusChange = (appointmentId, newStatus) => {
-    setAppointments(prev => 
-      prev.map(apt => 
-        apt.id === appointmentId ? { ...apt, status: newStatus } : apt
-      )
+  const handleStatusChange = async (appointmentId, newStatus) => {
+    // Сохраняем текущую позицию прокрутки
+    const scrollPosition = window.pageYOffset || document.documentElement.scrollTop
+
+    // Находим текущий прием для определения старого статуса
+    const currentAppointment = appointments.find(apt => apt.id === appointmentId)
+    const oldStatus = currentAppointment?.status || 'pending'
+
+    // Оптимистичное обновление UI - обновляем appointments
+    setAppointments((prev) =>
+      prev.map((apt) => (apt.id === appointmentId ? { ...apt, status: newStatus } : apt)),
     )
+
+    // Оптимистичное обновление stats для мгновенного обновления графика
+    setStats((prev) => {
+      const newStats = { ...prev }
+      
+      // Уменьшаем счетчик старого статуса
+      if (oldStatus === 'taken') {
+        newStats.taken = Math.max(0, newStats.taken - 1)
+      } else if (oldStatus === 'skipped') {
+        newStats.skipped = Math.max(0, newStats.skipped - 1)
+      } else if (oldStatus === 'pending') {
+        newStats.pending = Math.max(0, newStats.pending - 1)
+      }
+      
+      // Увеличиваем счетчик нового статуса
+      if (newStatus === 'taken') {
+        newStats.taken = newStats.taken + 1
+      } else if (newStatus === 'skipped') {
+        newStats.skipped = newStats.skipped + 1
+      } else if (newStatus === 'pending') {
+        newStats.pending = newStats.pending + 1
+      }
+      
+      return newStats
+    })
+
+    // Восстанавливаем позицию прокрутки после обновления состояния
+    requestAnimationFrame(() => {
+      window.scrollTo(0, scrollPosition)
+    })
+
+    try {
+      const token = localStorage.getItem('access_token')
+      if (!token) {
+        setError('Авторизуйтесь заново')
+        loadAppointments(selectedDate)
+        return
+      }
+
+      const base = 'http://localhost:8000/api/v1'
+      const response = await fetch(`${base}/appointments/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: 'include',
+        body: JSON.stringify({ appointment_id: appointmentId, status: newStatus }),
+      })
+
+      if (!response.ok) {
+        throw new Error('failed')
+      }
+
+      // После успешного обновления загружаем актуальные данные с сервера для синхронизации
+      await loadAppointments(selectedDate)
+      
+      // Восстанавливаем позицию прокрутки после загрузки данных
+      requestAnimationFrame(() => {
+        window.scrollTo(0, scrollPosition)
+      })
+    } catch (err) {
+      setError('Не удалось обновить статус. Попробуйте еще раз.')
+      // В случае ошибки обновляем данные, чтобы откатить оптимистичное обновление
+      loadAppointments(selectedDate)
+      
+      // Восстанавливаем позицию прокрутки после загрузки данных
+      requestAnimationFrame(() => {
+        window.scrollTo(0, scrollPosition)
+      })
+    }
   }
 
   const handlePrint = () => {
@@ -84,10 +212,12 @@ function Home() {
     }
   }
 
-  // Фильтруем приемы на выбранную дату
-  const selectedDateAppointments = appointments.filter(apt => {
-    // TODO: Фильтровать по реальной дате из API
-    return true
+  // Сортируем приемы по времени
+  const selectedDateAppointments = [...appointments].sort((a, b) => {
+    // Сравниваем время в формате "HH:MM"
+    const timeA = a.time || '00:00'
+    const timeB = b.time || '00:00'
+    return timeA.localeCompare(timeB)
   })
 
   return (
@@ -161,9 +291,9 @@ function Home() {
                 stroke="#e0e0e0"
                 strokeWidth="8"
               />
-              {todayStats.total > 0 && (
+              {stats.total > 0 && (
                 <>
-                  {todayStats.taken > 0 && (
+                  {stats.taken > 0 && (
                     <circle
                       cx="50"
                       cy="50"
@@ -171,13 +301,13 @@ function Home() {
                       fill="none"
                       stroke="#4caf50"
                       strokeWidth="8"
-                      strokeDasharray={`${(todayStats.taken / todayStats.total) * 283} 283`}
+                      strokeDasharray={`${(stats.taken / stats.total) * 283} 283`}
                       strokeDashoffset="0"
                       transform="rotate(-90 50 50)"
                       strokeLinecap="round"
                     />
                   )}
-                  {todayStats.skipped > 0 && (
+                  {stats.skipped > 0 && (
                     <circle
                       cx="50"
                       cy="50"
@@ -185,8 +315,8 @@ function Home() {
                       fill="none"
                       stroke="#f44336"
                       strokeWidth="8"
-                      strokeDasharray={`${(todayStats.skipped / todayStats.total) * 283} 283`}
-                      strokeDashoffset={`-${(todayStats.taken / todayStats.total) * 283}`}
+                      strokeDasharray={`${(stats.skipped / stats.total) * 283} 283`}
+                      strokeDashoffset={`-${(stats.taken / stats.total) * 283}`}
                       transform="rotate(-90 50 50)"
                       strokeLinecap="round"
                     />
@@ -195,7 +325,7 @@ function Home() {
               )}
             </svg>
             <div className="progress-text">
-              {todayStats.taken}/{todayStats.total}
+              {stats.taken}/{stats.total}
             </div>
           </div>
         </div>
@@ -209,8 +339,12 @@ function Home() {
             </button>
           </div>
 
+          {error && <div className="error-message">{error}</div>}
+
           <div className="appointments-list">
-            {selectedDateAppointments.length === 0 ? (
+            {loading ? (
+              <div>Загрузка...</div>
+            ) : selectedDateAppointments.length === 0 ? (
               <div className="empty-appointments">На этот день нет запланированных приемов</div>
             ) : (
               selectedDateAppointments.map((appointment) => (
@@ -223,22 +357,40 @@ function Home() {
                     </div>
                     <div className="appointment-status-controls">
                       <button
+                        type="button"
                         className={`status-btn ${appointment.status === 'taken' ? 'active' : ''}`}
-                        onClick={() => handleStatusChange(appointment.id, 'taken')}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          e.currentTarget.blur()
+                          handleStatusChange(appointment.id, 'taken')
+                        }}
                         title="Принял"
                       >
                         ✅
                       </button>
                       <button
+                        type="button"
                         className={`status-btn ${appointment.status === 'skipped' ? 'active' : ''}`}
-                        onClick={() => handleStatusChange(appointment.id, 'skipped')}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          e.currentTarget.blur()
+                          handleStatusChange(appointment.id, 'skipped')
+                        }}
                         title="Не принял"
                       >
                         ❌
                       </button>
                       <button
+                        type="button"
                         className={`status-btn ${appointment.status === 'pending' ? 'active' : ''}`}
-                        onClick={() => handleStatusChange(appointment.id, 'pending')}
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          e.currentTarget.blur()
+                          handleStatusChange(appointment.id, 'pending')
+                        }}
                         title="Предстоит"
                       >
                         ⚪

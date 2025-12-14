@@ -8,15 +8,10 @@ from app.config import settings
 
 
 def _ensure_database_exists(url: str) -> None:
-    """
-    Создает БД, если ее нет (подключаясь к postgres/default DB).
-    Работает только когда указана СУБД postgres.
-    """
     db_url = make_url(url)
     if db_url.drivername not in ("postgresql", "postgresql+psycopg2"):
         return
 
-    # Отделяем имя БД и подключаемся к системной базе
     database_name = db_url.database
     admin_url = db_url.set(database="postgres")
     admin_engine = create_engine(admin_url, isolation_level="AUTOCOMMIT", future=True)
@@ -34,7 +29,6 @@ def _ensure_database_exists(url: str) -> None:
 try:
     _ensure_database_exists(settings.database_url)
 except Exception:
-    # Если не удалось (нет прав) — просто идем дальше, чтобы увидеть понятную ошибку подключения
     pass
 
 engine = create_engine(settings.database_url, future=True)

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import api from '../services/api'
 import './Auth.css'
 
 function Register() {
@@ -24,19 +25,12 @@ function Register() {
     setLoading(true)
     setError('')
     
-    // TODO: Реализовать запрос к API
     try {
-      // ВРЕМЕННО: для тестирования
-      // const response = await api.post('/auth/register', { phone, password, name })
-      
-      // Для тестирования: логируем данные регистрации
-      console.log('Регистрация:', { phone, password, name })
-      
-      // После успешной регистрации перенаправляем на страницу входа
+      await api.post('/auth/register', { phone, password, name })
       alert('Регистрация прошла успешно! Теперь войдите в систему.')
       navigate('/login')
     } catch (err) {
-      setError('Ошибка регистрации. Попробуйте снова.')
+      setError(err.response?.data?.detail || 'Ошибка регистрации. Попробуйте снова.')
     } finally {
       setLoading(false)
     }

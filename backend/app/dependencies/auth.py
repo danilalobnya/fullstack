@@ -1,3 +1,4 @@
+import logging
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
@@ -7,14 +8,28 @@ from app.database import get_db
 from app.models import db_models
 from app.utils.security import decode_token
 
-bearer_scheme = HTTPBearer(auto_error=True)
+logger = logging.getLogger(__name__)
+
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Security(bearer_scheme),
+    credentials: HTTPAuthorizationCredentials | None = Security(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> db_models.User:
-    token = credentials.credentials
+    """
+    Получить текущего пользователя по токену из заголовка authorization
+    Токен передается напрямую без префикса "Bearer" - HTTPBearer автоматически его обработает
+    """
+    token: str | None = None
+    
+    # HTTPBearer автоматически извлекает токен из заголовка Authorization
+    if credentials and credentials.credentials:
+        token = credentials.credentials
+    
+    if not token:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authenticated")
+
     try:
         payload = decode_token(token)
     except JWTError:

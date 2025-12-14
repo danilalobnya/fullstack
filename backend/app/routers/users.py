@@ -16,7 +16,6 @@ from app.schemas.users import (
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
-# Endpoints
 @router.get("/me", response_model=UserFullProfileResponse)
 async def get_profile(
     current_user: db_models.User = Depends(get_current_user),

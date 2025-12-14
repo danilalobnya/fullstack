@@ -22,6 +22,9 @@
   padding: 2rem;
   margin: 1rem;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .profile-avatar {
@@ -141,4 +144,12 @@
   height: 24px;
   cursor: pointer;
   accent-color: #2196F3;
+}
+
+.logout-section {
+  margin-top: auto;
+}
+
+.logout-section .btn-primary {
+  width: 100%;
 }

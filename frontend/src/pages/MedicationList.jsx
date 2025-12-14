@@ -1,49 +1,84 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 import BottomNav from '../components/BottomNav'
 import CreateMedicationModal from '../components/CreateMedicationModal'
+import api from '../services/api'
 import './Medications.css'
 
 function MedicationList() {
-  const navigate = useNavigate()
   const [medications, setMedications] = useState([])
   const [searchQuery, setSearchQuery] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [selectedMedication, setSelectedMedication] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const fetchMedications = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const token = localStorage.getItem('access_token')
+      if (!token) {
+        setError('Авторизуйтесь заново')
+        setLoading(false)
+        return
+      }
+
+      const base = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
+      const url = new URL(`${base}/medications/`, window.location.origin)
+      if (searchQuery) url.searchParams.set('search', searchQuery)
+
+      const response = await fetch(url.toString(), {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: 'include',
+      })
+
+      if (!response.ok) {
+        throw new Error('failed')
+      }
+
+      const data = await response.json()
+      setMedications(data)
+    } catch (err) {
+      setError('Не удалось загрузить лекарства')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    // TODO: Загрузить лекарства из API
-    setMedications([
-      { id: 1, name: 'Коллаген морской', quantity: '1 капсула', description: 'описание описание описание описание описание описание описание' },
-      { id: 2, name: 'Магния цитрат', quantity: '2 таблетки', description: 'описание описание описание описание описание описание описание' },
-      { id: 3, name: 'Omega-3', quantity: '1 капсула', description: 'описание описание описание описание описание описание описание' }
-    ])
-    setLoading(false)
-  }, [])
+    fetchMedications()
+  }, [searchQuery])
 
   const filteredMedications = medications.filter(med => 
     med.name.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
   const handleMedicationClick = (medication) => {
-    // В каталоге только просмотр, редактирование и удаление
     setSelectedMedication(medication)
   }
 
   const handleEdit = (medication, e) => {
     e.stopPropagation()
-    // TODO: Открыть модальное окно редактирования
-    alert(`Редактирование: ${medication.name}`)
+    setSelectedMedication(medication)
     setShowModal(true)
   }
 
   const handleDelete = (medication, e) => {
     e.stopPropagation()
     if (window.confirm(`Вы уверены, что хотите удалить "${medication.name}"?`)) {
-      // TODO: Удалить через API
-      setMedications(prev => prev.filter(m => m.id !== medication.id))
+      api.delete(`/medications/${medication.id}`).then(() => {
+        setMedications(prev => prev.filter(m => m.id !== medication.id))
+      }).catch(() => setError('Не удалось удалить лекарство'))
     }
+  }
+
+  const handleMedicationSaved = () => {
+    setSelectedMedication(null)
+    setShowModal(false)
+    fetchMedications()
   }
 
   return (
@@ -58,7 +93,10 @@ function MedicationList() {
             <h2>Список созданных лекарств</h2>
             <button 
               className="add-btn"
-              onClick={() => setShowModal(true)}
+              onClick={() => {
+                setSelectedMedication(null)
+                setShowModal(true)
+              }}
             >
               +
             </button>
@@ -74,6 +112,8 @@ function MedicationList() {
             />
             <span className="search-icon">🔍</span>
           </div>
+
+          {error && <div className="error-message">{error}</div>}
 
           <div className="medications-list">
             {loading ? (
@@ -111,7 +151,11 @@ function MedicationList() {
       </div>
 
       {showModal && (
-        <CreateMedicationModal onClose={() => setShowModal(false)} />
+        <CreateMedicationModal
+          onClose={() => setShowModal(false)}
+          onSaved={handleMedicationSaved}
+          medication={selectedMedication}
+        />
       )}
 
       <BottomNav />

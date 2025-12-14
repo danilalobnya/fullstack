@@ -1,27 +1,63 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import BottomNav from '../components/BottomNav'
+import api, { clearTokens } from '../services/api'
 import './Profile.css'
 
 function Profile() {
+  const navigate = useNavigate()
   const [user, setUser] = useState({
-    name: 'Даниил Соболев',
-    phone: '+7 966 113 10 57'
+    name: '',
+    phone: ''
   })
-  const [familyMembers, setFamilyMembers] = useState([
-    { id: 1, name: 'Мама', phone: '+7 966 113 10 57' },
-    { id: 2, name: 'Брат', phone: '+7 966 113 10 57' }
-  ])
+  const [familyMembers, setFamilyMembers] = useState([])
   const [smsNotifications, setSmsNotifications] = useState(true)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    // TODO: Загрузить данные профиля из API
-    setLoading(false)
+    const loadProfile = async () => {
+      try {
+        const response = await api.get('/users/me')
+        setUser(response.data.user)
+        setFamilyMembers(response.data.family_members || [])
+        setSmsNotifications(response.data.user.sms_notifications)
+      } catch (err) {
+        setError('Не удалось загрузить профиль')
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadProfile()
   }, [])
 
-  const handleAddFamilyMember = () => {
-    // TODO: Открыть модальное окно для добавления члена семьи
-    alert('Функция добавления члена семьи будет реализована')
+  const handleAddFamilyMember = async () => {
+    const name = prompt('Имя члена семьи')
+    const phone = prompt('Телефон члена семьи')
+    if (!name || !phone) return
+    try {
+      const response = await api.post('/users/me/family', { name, phone })
+      setFamilyMembers((prev) => [...prev, response.data])
+    } catch {
+      setError('Не удалось добавить члена семьи')
+    }
+  }
+
+  const handleSmsToggle = async (checked) => {
+    setSmsNotifications(checked)
+    try {
+      const response = await api.put('/users/me', { sms_notifications: checked })
+      setUser((prev) => ({ ...prev, sms_notifications: response.data.sms_notifications }))
+    } catch {
+      setSmsNotifications(!checked)
+      setError('Не удалось обновить настройки уведомлений')
+    }
+  }
+
+  const handleLogout = () => {
+    clearTokens()
+    window.dispatchEvent(new Event('auth-changed'))
+    navigate('/login')
   }
 
   if (loading) {
@@ -40,7 +76,7 @@ function Profile() {
           <h2 className="profile-name">{user.name}</h2>
           <p className="profile-phone">{user.phone}</p>
 
-          <div className="profile-divider"></div>
+          {error && <div className="error-message">{error}</div>}
 
           <div className="family-section">
             <h3>Моя семья</h3>
@@ -68,10 +104,16 @@ function Profile() {
               <input
                 type="checkbox"
                 checked={smsNotifications}
-                onChange={(e) => setSmsNotifications(e.target.checked)}
+                onChange={(e) => handleSmsToggle(e.target.checked)}
                 className="sms-checkbox"
               />
             </label>
+          </div>
+
+          <div className="logout-section">
+            <button className="btn-primary" onClick={handleLogout}>
+              Выйти из аккаунта
+            </button>
           </div>
         </div>
       </div>

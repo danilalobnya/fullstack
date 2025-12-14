@@ -13,6 +13,9 @@ class Settings(BaseSettings):
 
     api_v1_prefix: str = "/api/v1"
 
+    # Для фронтенда: безопасно читаем VITE_API_URL, чтобы не падать на лишнем поле
+    vite_api_url: str | None = Field(default=None, env="VITE_API_URL")
+
     secret_key: str = Field(default="your-secret-key-change-in-production", env="SECRET_KEY")
     access_token_expire_minutes: int = 30
     

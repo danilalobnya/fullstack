@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import api, { setTokens, clearTokens } from '../services/api'
 import './Auth.css'
 
 function Login() {
@@ -15,20 +16,14 @@ function Login() {
     setLoading(true)
     setError('')
     
-    // TODO: Реализовать запрос к API
     try {
-      // ВРЕМЕННО: для тестирования создаем моковый токен
-      // const response = await api.post('/auth/login', { phone, password })
-      // localStorage.setItem('token', response.data.access_token)
-      
-      // Для тестирования: сохраняем моковый токен
-      console.log('Вход:', { phone, password })
-      localStorage.setItem('token', 'mock_token_' + Date.now())
-      localStorage.setItem('user_phone', phone)
-      
+      const response = await api.post('/auth/login', { phone, password })
+      setTokens(response.data)
+      window.dispatchEvent(new Event('auth-changed'))
       navigate('/')
     } catch (err) {
-      setError('Неверный номер телефона или пароль')
+      clearTokens()
+      setError(err.response?.data?.detail || 'Неверный номер телефона или пароль')
       setLoading(false)
     }
   }
