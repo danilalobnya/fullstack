@@ -1,0 +1,55 @@
+.admin-page {
+  min-height: 100vh;
+  padding: 1.5rem 1rem 5rem;
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+  color: #f9fafb;
+}
+
+.admin-header h1 {
+  font-size: 1.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.admin-header p {
+  color: #9ca3af;
+  margin-bottom: 1.5rem;
+}
+
+.admin-content {
+  background: rgba(15, 23, 42, 0.9);
+  border-radius: 1rem;
+  padding: 1rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 0.5rem;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.4);
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.admin-table th {
+  color: #9ca3af;
+  font-weight: 600;
+}
+
+.admin-table tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-table select {
+  background: #111827;
+  color: #f9fafb;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(148, 163, 184, 0.8);
+  padding: 0.25rem 0.5rem;
+}
+
+
