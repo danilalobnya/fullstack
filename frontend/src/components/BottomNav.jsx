@@ -3,6 +3,7 @@ import './BottomNav.css'
 
 function BottomNav() {
   const location = useLocation()
+  const role = localStorage.getItem('user_role') || 'user'
 
   const isActive = (path) => {
     // Точное совпадение
@@ -29,6 +30,10 @@ function BottomNav() {
     { path: '/medications', label: 'каталог лекарств', icon: '📋' },
     { path: '/profile', label: 'профиль', icon: '👤' }
   ]
+
+  if (role === 'admin') {
+    navItems.push({ path: '/admin', label: 'админ', icon: '🛠️' })
+  }
 
   return (
     <nav className="bottom-nav">

@@ -17,12 +17,14 @@ class TokenPairResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     user_id: int
+    role: str
 
 
 class UserResponse(BaseModel):
     id: int
     phone: str
     name: str
+    role: str
 
 
 class RefreshRequest(BaseModel):

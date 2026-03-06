@@ -14,6 +14,9 @@ class User(Base):
     password_hash = Column(String, nullable=False)
     name = Column(String, nullable=False)
     sms_notifications = Column(Boolean, default=True)
+    # Роль пользователя в системе (RBAC)
+    # Возможные значения: "user" (по умолчанию), "admin"
+    role = Column(String, nullable=False, default="user")
 
     family_members = relationship("FamilyMember", back_populates="user", cascade="all, delete")
     medications = relationship("Medication", back_populates="user", cascade="all, delete")

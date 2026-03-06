@@ -66,7 +66,7 @@ function CreateMedicationModal({ onClose, onSaved, medication }) {
 
       const data = await response.json()
       onSaved?.(data)
-      onClose()
+    onClose()
     } catch (err) {
       setError(err.response?.data?.detail || 'Не удалось сохранить лекарство')
     }

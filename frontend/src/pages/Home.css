@@ -264,6 +264,18 @@
   transform: scale(1.1);
 }
 
+.status-btn.delete-btn {
+  border-color: rgba(255, 82, 82, 0.7);
+  opacity: 0.8;
+}
+
+.status-btn.delete-btn:hover {
+  opacity: 1;
+  border-color: #ff5252;
+  background: rgba(255, 82, 82, 0.2);
+  transform: scale(1.1);
+}
+
 .appointment-card.missed {
   background: #ff9800;
 }

@@ -48,7 +48,12 @@ async def login(credentials: LoginRequest, db: Session = Depends(get_db)):
     )
     db.add(db_refresh)
     db.commit()
-    return TokenPairResponse(access_token=access, refresh_token=refresh, user_id=user.id)
+    return TokenPairResponse(
+        access_token=access,
+        refresh_token=refresh,
+        user_id=user.id,
+        role=user.role,
+    )
 
 
 @router.post("/register", response_model=UserResponse)
@@ -64,16 +69,18 @@ async def register(user_data: RegisterRequest, db: Session = Depends(get_db)):
             detail="Пользователь с таким телефоном уже существует",
         )
 
+    # По умолчанию всем новым пользователям назначаем роль "user"
     user = db_models.User(
         phone=user_data.phone,
         name=user_data.name,
         password_hash=get_password_hash(user_data.password),
         sms_notifications=True,
+        role="user",
     )
     db.add(user)
     db.commit()
     db.refresh(user)
-    return UserResponse(id=user.id, phone=user.phone, name=user.name)
+    return UserResponse(id=user.id, phone=user.phone, name=user.name, role=user.role)
 
 
 @router.post("/refresh", response_model=TokenPairResponse)
@@ -116,4 +123,9 @@ async def refresh_token(data: RefreshRequest, db: Session = Depends(get_db)):
     )
     db.commit()
 
-    return TokenPairResponse(access_token=new_access, refresh_token=new_refresh, user_id=user.id)
+    return TokenPairResponse(
+        access_token=new_access,
+        refresh_token=new_refresh,
+        user_id=user.id,
+        role=user.role,
+    )

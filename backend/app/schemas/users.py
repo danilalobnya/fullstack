@@ -32,3 +32,12 @@ class UserFullProfileResponse(BaseModel):
     user: UserProfileResponse
     family_members: List[FamilyMemberResponse]
 
+
+class UserAdminItem(BaseModel):
+    """
+    Упрощенное представление пользователя для административных операций.
+    """
+    id: int
+    phone: str
+    name: str
+    role: str

@@ -76,7 +76,7 @@ async def get_appointments_calendar(
 async def get_day_appointments(
     date: date,
     user_id: int,
-    family_member_id: Optional[int] = None,
+    family_member_id: Optional[int] = Query(None, description="ID члена семьи"),
     db: Session = Depends(get_db),
     current_user: db_models.User = Depends(get_current_user),
 ):
@@ -84,17 +84,70 @@ async def get_day_appointments(
     Получить приемы на конкретный день
     """
     target_user_id = user_id or current_user.id
-    query = db.query(db_models.Appointment).filter(db_models.Appointment.user_id == target_user_id).filter(
+    
+    # КРИТИЧЕСКОЕ ЛОГИРОВАНИЕ - должно появиться при каждом запросе
+    print("=" * 80)
+    print(f"[CRITICAL] get_day_appointments CALLED")
+    print(f"[CRITICAL] date={date}, user_id={target_user_id}")
+    print(f"[CRITICAL] family_member_id={family_member_id}, type={type(family_member_id)}")
+    print(f"[CRITICAL] family_member_id is None: {family_member_id is None}")
+    print(f"[CRITICAL] family_member_id == None: {family_member_id == None}")
+    print("=" * 80)
+    
+    # СНАЧАЛА получаем ВСЕ назначения для пользователя и даты
+    # Затем фильтруем на уровне Python для гарантии правильной работы
+    all_appointments = db.query(db_models.Appointment).filter(
+        db_models.Appointment.user_id == target_user_id
+    ).filter(
         db_models.Appointment.date == date
-    )
-    if family_member_id:
-        query = query.filter(db_models.Appointment.family_member_id == family_member_id)
-    appointments = query.all()
-    stats = {"pending": 0, "taken": 0, "skipped": 0}
+    ).all()
+    
+    print(f"[DEBUG] SQL query returned {len(all_appointments)} appointments (before family_member_id filter)")
+    
+    # ФИЛЬТРАЦИЯ НА УРОВНЕ PYTHON - это гарантирует правильную работу
+    appointments = []
+    if family_member_id is not None:
+        # Если передан family_member_id, фильтруем по нему
+        print(f"[DEBUG] Filtering by family_member_id={family_member_id}")
+        for apt in all_appointments:
+            if apt.family_member_id == family_member_id:
+                appointments.append(apt)
+            else:
+                print(f"[DEBUG] Skipping appointment {apt.id} (family_member_id={apt.family_member_id} != {family_member_id})")
+    else:
+        # Если family_member_id не передан, показываем только приемы без привязки к члену семьи (для главного пользователя)
+        print(f"[DEBUG] Filtering by family_member_id IS NULL (family_member_id was not provided)")
+        for apt in all_appointments:
+            if apt.family_member_id is None:
+                appointments.append(apt)
+            else:
+                print(f"[DEBUG] Skipping appointment {apt.id} (family_member_id={apt.family_member_id} is not None)")
+    
+    print(f"[DEBUG] After Python filter: {len(appointments)} appointments")
+    for apt in appointments:
+        print(f"[DEBUG] Appointment {apt.id}: family_member_id={apt.family_member_id}, medication={apt.medication.name if apt.medication else 'None'}")
+    
+    # ФИНАЛЬНАЯ ПРОВЕРКА - убеждаемся, что фильтрация работает правильно
+    if family_member_id is None:
+        # Для главного пользователя - проверяем, что все назначения имеют family_member_id = None
+        invalid_appointments = [apt for apt in appointments if apt.family_member_id is not None]
+        if invalid_appointments:
+            print(f"[ERROR] CRITICAL: Found {len(invalid_appointments)} appointments with non-null family_member_id for main user!")
+            for apt in invalid_appointments:
+                print(f"[ERROR] Appointment {apt.id} has family_member_id={apt.family_member_id}")
+            # Удаляем невалидные назначения
+            appointments = [apt for apt in appointments if apt.family_member_id is None]
+            print(f"[ERROR] Fixed: Now returning {len(appointments)} appointments")
+    
+    # Создаем stats из отфильтрованных appointments
+    final_stats = {"pending": 0, "taken": 0, "skipped": 0}
     for a in appointments:
-        if a.status in stats:
-            stats[a.status] += 1
-    stats["total"] = len(appointments)
+        if a.status in final_stats:
+            final_stats[a.status] += 1
+    final_stats["total"] = len(appointments)
+    
+    print(f"[DEBUG] ========== RETURNING {len(appointments)} appointments (family_member_id={family_member_id}) ==========")
+    
     return DailyAppointmentsResponse(
         date=date,
         appointments=[
@@ -109,7 +162,7 @@ async def get_day_appointments(
             )
             for a in appointments
         ],
-        stats=stats,
+        stats=final_stats,
     )
 
 
@@ -177,6 +230,7 @@ async def create_appointment(
 @router.put("/status", response_model=AppointmentResponse)
 async def update_appointment_status(
     status_data: UpdateAppointmentStatusRequest,
+    family_member_id: Optional[int] = Query(None, description="ID члена семьи для проверки"),
     db: Session = Depends(get_db),
     current_user: db_models.User = Depends(get_current_user),
 ):
@@ -194,6 +248,29 @@ async def update_appointment_status(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Прием не найден")
     if appointment.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нельзя изменять чужой прием")
+    
+    # КРИТИЧЕСКАЯ ПРОВЕРКА: убеждаемся, что назначение принадлежит правильному пользователю/члену семьи
+    # Если family_member_id не передан (главный пользователь), назначение должно иметь family_member_id = None
+    # Если family_member_id передан (член семьи), назначение должно иметь family_member_id = family_member_id
+    print(f"[CRITICAL] update_appointment_status: appointment_id={status_data.appointment_id}, family_member_id param={family_member_id}, appointment.family_member_id={appointment.family_member_id}")
+    
+    if family_member_id is None:
+        # Главный пользователь - назначение должно иметь family_member_id = None
+        if appointment.family_member_id is not None:
+            print(f"[ERROR] Главный пользователь пытается изменить назначение для члена семьи (family_member_id={appointment.family_member_id})")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Нельзя изменять статус приема, назначенного для члена семьи"
+            )
+    else:
+        # Член семьи - назначение должно иметь family_member_id = family_member_id
+        if appointment.family_member_id != family_member_id:
+            print(f"[ERROR] Член семьи {family_member_id} пытается изменить назначение для другого пользователя (family_member_id={appointment.family_member_id})")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Нельзя изменять статус приема другого члена семьи"
+            )
+    
     appointment.status = status_data.status
     db.commit()
     db.refresh(appointment)
@@ -211,6 +288,7 @@ async def update_appointment_status(
 @router.delete("/{appointment_id}")
 async def delete_appointment(
     appointment_id: int,
+    family_member_id: Optional[int] = Query(None, description="ID члена семьи для проверки"),
     db: Session = Depends(get_db),
     current_user: db_models.User = Depends(get_current_user),
 ):
@@ -222,6 +300,27 @@ async def delete_appointment(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Прием не найден")
     if appointment.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Нельзя удалять чужой прием")
+    
+    # КРИТИЧЕСКАЯ ПРОВЕРКА: убеждаемся, что назначение принадлежит правильному пользователю/члену семьи
+    print(f"[CRITICAL] delete_appointment: appointment_id={appointment_id}, family_member_id param={family_member_id}, appointment.family_member_id={appointment.family_member_id}")
+    
+    if family_member_id is None:
+        # Главный пользователь - назначение должно иметь family_member_id = None
+        if appointment.family_member_id is not None:
+            print(f"[ERROR] Главный пользователь пытается удалить назначение для члена семьи (family_member_id={appointment.family_member_id})")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Нельзя удалять прием, назначенный для члена семьи"
+            )
+    else:
+        # Член семьи - назначение должно иметь family_member_id = family_member_id
+        if appointment.family_member_id != family_member_id:
+            print(f"[ERROR] Член семьи {family_member_id} пытается удалить назначение для другого пользователя (family_member_id={appointment.family_member_id})")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Нельзя удалять прием другого члена семьи"
+            )
+    
     db.delete(appointment)
     db.commit()
     return {"status": "deleted", "appointment_id": appointment_id}

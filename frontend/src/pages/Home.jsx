@@ -7,7 +7,10 @@ import './Home.css'
 
 function Home() {
   const navigate = useNavigate()
-  const [selectedFamilyMember, setSelectedFamilyMember] = useState(0)
+  const [selectedFamilyMember, setSelectedFamilyMember] = useState(() => {
+    const saved = localStorage.getItem('selectedFamilyMember')
+    return saved ? parseInt(saved, 10) : 0
+  })
   const [viewType, setViewType] = useState('day') // day или month
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -56,12 +59,20 @@ function Home() {
       const params = new URLSearchParams({
         user_id: userId,
       })
-      if (selectedFamilyMember) {
-        params.append('family_member_id', selectedFamilyMember)
+      const familyMemberIdNum = typeof selectedFamilyMember === 'string' ? parseInt(selectedFamilyMember, 10) : selectedFamilyMember
+      if (familyMemberIdNum !== 0 && familyMemberIdNum !== null && familyMemberIdNum !== undefined && !isNaN(familyMemberIdNum)) {
+        params.append('family_member_id', familyMemberIdNum.toString())
       }
 
       const base = 'http://localhost:8000/api/v1'
-      const response = await fetch(`${base}/appointments/day/${dateStr}?${params.toString()}`, {
+      const url = `${base}/appointments/day/${dateStr}?${params.toString()}`
+      console.log('[DEBUG] Loading appointments:', { 
+        selectedFamilyMember, 
+        selectedFamilyMemberType: typeof selectedFamilyMember,
+        url,
+        willSendFamilyMemberId: selectedFamilyMember && selectedFamilyMember !== 0
+      })
+      const response = await fetch(url, {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
@@ -163,7 +174,13 @@ function Home() {
       }
 
       const base = 'http://localhost:8000/api/v1'
-      const response = await fetch(`${base}/appointments/status`, {
+      const url = new URL(`${base}/appointments/status`)
+      const familyMemberIdNum = typeof selectedFamilyMember === 'string' ? parseInt(selectedFamilyMember, 10) : selectedFamilyMember
+      if (familyMemberIdNum !== 0 && familyMemberIdNum !== null && familyMemberIdNum !== undefined && !isNaN(familyMemberIdNum)) {
+        url.searchParams.set('family_member_id', familyMemberIdNum.toString())
+      }
+      
+      const response = await fetch(url.toString(), {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -189,6 +206,88 @@ function Home() {
       // В случае ошибки обновляем данные, чтобы откатить оптимистичное обновление
       loadAppointments(selectedDate)
       
+      // Восстанавливаем позицию прокрутки после загрузки данных
+      requestAnimationFrame(() => {
+        window.scrollTo(0, scrollPosition)
+      })
+    }
+  }
+
+  const handleDelete = async (appointmentId) => {
+    if (!window.confirm('Вы уверены, что хотите удалить этот прием?')) {
+      return
+    }
+
+    // Сохраняем текущую позицию прокрутки
+    const scrollPosition = window.pageYOffset || document.documentElement.scrollTop
+
+    // Находим текущий прием для обновления stats
+    const currentAppointment = appointments.find(apt => apt.id === appointmentId)
+    const appointmentStatus = currentAppointment?.status || 'pending'
+
+    // Оптимистичное обновление UI - удаляем прием из списка
+    setAppointments((prev) => prev.filter((apt) => apt.id !== appointmentId))
+
+    // Оптимистичное обновление stats
+    setStats((prev) => {
+      const newStats = { ...prev }
+      if (appointmentStatus === 'taken') {
+        newStats.taken = Math.max(0, newStats.taken - 1)
+      } else if (appointmentStatus === 'skipped') {
+        newStats.skipped = Math.max(0, newStats.skipped - 1)
+      } else if (appointmentStatus === 'pending') {
+        newStats.pending = Math.max(0, newStats.pending - 1)
+      }
+      newStats.total = Math.max(0, newStats.total - 1)
+      return newStats
+    })
+
+    // Восстанавливаем позицию прокрутки после обновления состояния
+    requestAnimationFrame(() => {
+      window.scrollTo(0, scrollPosition)
+    })
+
+    try {
+      const token = localStorage.getItem('access_token')
+      if (!token) {
+        setError('Авторизуйтесь заново')
+        loadAppointments(selectedDate)
+        return
+      }
+
+      const base = 'http://localhost:8000/api/v1'
+      // ВАЖНО: передаем family_member_id только если выбран член семьи (не 0)
+      const url = new URL(`${base}/appointments/${appointmentId}`)
+      const familyMemberIdNum = typeof selectedFamilyMember === 'string' ? parseInt(selectedFamilyMember, 10) : selectedFamilyMember
+      if (familyMemberIdNum !== 0 && familyMemberIdNum !== null && familyMemberIdNum !== undefined && !isNaN(familyMemberIdNum)) {
+        url.searchParams.set('family_member_id', familyMemberIdNum.toString())
+      }
+
+      const response = await fetch(url.toString(), {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        credentials: 'include',
+      })
+
+      if (!response.ok) {
+        throw new Error('failed')
+      }
+
+      // После успешного удаления загружаем актуальные данные с сервера для синхронизации
+      await loadAppointments(selectedDate)
+
+      // Восстанавливаем позицию прокрутки после загрузки данных
+      requestAnimationFrame(() => {
+        window.scrollTo(0, scrollPosition)
+      })
+    } catch (err) {
+      setError('Не удалось удалить прием. Попробуйте еще раз.')
+      // В случае ошибки обновляем данные, чтобы откатить оптимистичное обновление
+      loadAppointments(selectedDate)
+
       // Восстанавливаем позицию прокрутки после загрузки данных
       requestAnimationFrame(() => {
         window.scrollTo(0, scrollPosition)
@@ -231,7 +330,10 @@ function Home() {
               <button
                 key={member.id}
                 className={`family-icon ${selectedFamilyMember === member.id ? 'selected' : ''}`}
-                onClick={() => setSelectedFamilyMember(member.id)}
+                onClick={() => {
+                  setSelectedFamilyMember(member.id)
+                  localStorage.setItem('selectedFamilyMember', member.id.toString())
+                }}
               >
                 {member.icon}
               </button>
@@ -394,6 +496,19 @@ function Home() {
                         title="Предстоит"
                       >
                         ⚪
+                      </button>
+                      <button
+                        type="button"
+                        className="status-btn delete-btn"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          e.stopPropagation()
+                          e.currentTarget.blur()
+                          handleDelete(appointment.id)
+                        }}
+                        title="Удалить прием"
+                      >
+                        🗑️
                       </button>
                     </div>
                   </div>

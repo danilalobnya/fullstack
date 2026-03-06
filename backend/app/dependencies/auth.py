@@ -1,4 +1,6 @@
 import logging
+from typing import Iterable, List
+
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
@@ -47,4 +49,37 @@ def get_current_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Пользователь не найден")
     return user
+
+
+def require_roles(allowed_roles: Iterable[str]):
+    """
+    Dependency-фабрика для проверки роли пользователя (RBAC).
+    Пример использования:
+
+    @router.get("/admin-only", dependencies=[Depends(require_roles(["admin"]))])
+    """
+
+    allowed = set(allowed_roles)
+
+    def _checker(current_user: db_models.User = Depends(get_current_user)) -> db_models.User:
+        if current_user.role not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Недостаточно прав для выполнения этого действия",
+            )
+        return current_user
+
+    return _checker
+
+
+def require_admin(current_user: db_models.User = Depends(get_current_user)) -> db_models.User:
+    """
+    Упрощенный dependency для проверки роли администратора.
+    """
+    if current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Доступ разрешен только администраторам",
+        )
+    return current_user
 

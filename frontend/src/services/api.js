@@ -2,10 +2,11 @@ import axios, { AxiosHeaders } from 'axios'
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1'
 
-export const setTokens = ({ access_token, refresh_token, user_id }) => {
+export const setTokens = ({ access_token, refresh_token, user_id, role }) => {
   if (access_token) localStorage.setItem('access_token', access_token)
   if (refresh_token) localStorage.setItem('refresh_token', refresh_token)
   if (user_id) localStorage.setItem('user_id', user_id)
+  if (role) localStorage.setItem('user_role', role)
   if (access_token) {
     api.defaults.headers.common.Authorization = `Bearer ${access_token}`
     api.defaults.headers.common.authorization = `Bearer ${access_token}`
@@ -16,6 +17,7 @@ export const clearTokens = () => {
   localStorage.removeItem('access_token')
   localStorage.removeItem('refresh_token')
   localStorage.removeItem('user_id')
+  localStorage.removeItem('user_role')
   delete api.defaults.headers.common.Authorization
   delete api.defaults.headers.common.authorization
   window.dispatchEvent(new Event('auth-changed'))
@@ -63,8 +65,8 @@ const refreshTokens = async () => {
   refreshPromise = axios
     .post(`${API_BASE}/auth/refresh`, { refresh_token })
     .then((response) => {
-      const { access_token: access, refresh_token: refresh, user_id } = response.data
-      setTokens({ access_token: access, refresh_token: refresh, user_id })
+      const { access_token: access, refresh_token: refresh, user_id, role } = response.data
+      setTokens({ access_token: access, refresh_token: refresh, user_id, role })
       return access
     })
     .catch((error) => {

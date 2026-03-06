@@ -132,12 +132,19 @@ function MedicationSchedule() {
       }
 
       const sortedDates = [...selectedDates].sort((a, b) => a - b)
+      // Получаем выбранного члена семьи из localStorage (0 = главный пользователь)
+      const selectedFamilyMember = localStorage.getItem('selectedFamilyMember')
+      const familyMemberId = selectedFamilyMember && selectedFamilyMember !== '0' 
+        ? parseInt(selectedFamilyMember, 10) 
+        : null
+      
       const payload = {
         medication_id: selectedMedication.id,
         start_date: formatDate(sortedDates[0]),
         end_date: formatDate(sortedDates[sortedDates.length - 1]),
         times: selectedTimes,
         period_type: periodType,
+        ...(familyMemberId && { family_member_id: familyMemberId })
       }
 
       const base = 'http://localhost:8000/api/v1'

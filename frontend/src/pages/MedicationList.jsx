@@ -70,7 +70,7 @@ function MedicationList() {
     e.stopPropagation()
     if (window.confirm(`Вы уверены, что хотите удалить "${medication.name}"?`)) {
       api.delete(`/medications/${medication.id}`).then(() => {
-        setMedications(prev => prev.filter(m => m.id !== medication.id))
+      setMedications(prev => prev.filter(m => m.id !== medication.id))
       }).catch(() => setError('Не удалось удалить лекарство'))
     }
   }
