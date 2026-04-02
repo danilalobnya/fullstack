@@ -7,8 +7,9 @@ class Settings(BaseSettings):
     debug: bool = Field(default=False, env="DEBUG")
 
     database_url: str = Field(
-        default="postgresql://user:password@localhost:5432/fullstack_db",
-        env="DATABASE_URL"
+        default="sqlite:///./fullstack.db",
+        description="Локально по умолчанию SQLite. Для PostgreSQL задайте DATABASE_URL.",
+        env="DATABASE_URL",
     )
 
     api_v1_prefix: str = "/api/v1"

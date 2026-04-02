@@ -1,14 +1,28 @@
 import { useEffect, useState } from 'react'
-import api from '../services/api'
+import type { Medication, TakeWithFood } from '../types/models'
 import './CreateMedicationModal.css'
 
-function CreateMedicationModal({ onClose, onSaved, medication }) {
-  const [formData, setFormData] = useState({
+interface CreateMedicationModalProps {
+  onClose: () => void
+  onSaved?: (data: Medication) => void
+  medication?: Medication | null
+}
+
+interface FormState {
+  name: string
+  quantity: string
+  dosage: string
+  description: string
+  takeWithFood: TakeWithFood
+}
+
+function CreateMedicationModal({ onClose, onSaved, medication }: CreateMedicationModalProps) {
+  const [formData, setFormData] = useState<FormState>({
     name: 'Коллаген морской',
     quantity: '1 капсула',
     dosage: '100 мг',
     description: '',
-    takeWithFood: 'with' // before, with, after
+    takeWithFood: 'with',
   })
   const [error, setError] = useState('')
   const isEditing = !!medication
@@ -20,7 +34,7 @@ function CreateMedicationModal({ onClose, onSaved, medication }) {
         quantity: medication.quantity || '',
         dosage: medication.dosage || '',
         description: medication.description || '',
-        takeWithFood: medication.take_with_food || 'with',
+        takeWithFood: (medication.take_with_food as TakeWithFood) || 'with',
       })
     }
   }, [medication])
@@ -28,7 +42,7 @@ function CreateMedicationModal({ onClose, onSaved, medication }) {
   const quantities = ['1 капсула', '2 капсулы', '1 таблетка', '2 таблетки', '5 мл', '10 мл']
   const dosages = ['100 мг', '200 мг', '500 мг', '1000 мг', '5 мл', '10 мл']
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     const payload = {
@@ -47,7 +61,7 @@ function CreateMedicationModal({ onClose, onSaved, medication }) {
       }
 
       const base = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
-      const endpoint = isEditing ? `${base}/medications/${medication.id}` : `${base}/medications/`
+      const endpoint = isEditing ? `${base}/medications/${medication!.id}` : `${base}/medications/`
 
       const response = await fetch(endpoint, {
         method: isEditing ? 'PUT' : 'POST',
@@ -60,15 +74,16 @@ function CreateMedicationModal({ onClose, onSaved, medication }) {
       })
 
       if (!response.ok) {
-        const errJson = await response.json().catch(() => ({}))
+        const errJson = (await response.json().catch(() => ({}))) as { detail?: string }
         throw new Error(errJson.detail || 'failed')
       }
 
-      const data = await response.json()
+      const data = (await response.json()) as Medication
       onSaved?.(data)
-    onClose()
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Не удалось сохранить лекарство')
+      onClose()
+    } catch (err: unknown) {
+      const ax = err as { response?: { data?: { detail?: string } } }
+      setError(ax.response?.data?.detail || 'Не удалось сохранить лекарство')
     }
   }
 
@@ -95,8 +110,10 @@ function CreateMedicationModal({ onClose, onSaved, medication }) {
               onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
               className="form-select"
             >
-              {quantities.map(qty => (
-                <option key={qty} value={qty}>{qty}</option>
+              {quantities.map((qty) => (
+                <option key={qty} value={qty}>
+                  {qty}
+                </option>
               ))}
             </select>
           </div>
@@ -108,8 +125,10 @@ function CreateMedicationModal({ onClose, onSaved, medication }) {
               onChange={(e) => setFormData({ ...formData, dosage: e.target.value })}
               className="form-select"
             >
-              {dosages.map(dos => (
-                <option key={dos} value={dos}>{dos}</option>
+              {dosages.map((dos) => (
+                <option key={dos} value={dos}>
+                  {dos}
+                </option>
               ))}
             </select>
           </div>
@@ -120,7 +139,7 @@ function CreateMedicationModal({ onClose, onSaved, medication }) {
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className="form-textarea"
-              rows="3"
+              rows={3}
             />
           </div>
 
@@ -166,4 +185,3 @@ function CreateMedicationModal({ onClose, onSaved, medication }) {
 }
 
 export default CreateMedicationModal
-

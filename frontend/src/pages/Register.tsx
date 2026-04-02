@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import axios from 'axios'
 import api from '../services/api'
 import './Auth.css'
 
@@ -14,23 +15,35 @@ function Register() {
   const [error, setError] = useState('')
   const navigate = useNavigate()
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (password !== confirmPassword) {
       setError('Пароли не совпадают')
       return
     }
-    
+
     setLoading(true)
     setError('')
-    
+
     try {
       await api.post('/auth/register', { phone, password, name })
       alert('Регистрация прошла успешно! Теперь войдите в систему.')
       navigate('/login')
-    } catch (err) {
-      setError(err.response?.data?.detail || 'Ошибка регистрации. Попробуйте снова.')
+    } catch (err: unknown) {
+      const detail = axios.isAxiosError(err)
+        ? (err.response?.data as { detail?: string } | undefined)?.detail
+        : undefined
+      const timedOut = axios.isAxiosError(err) && err.code === 'ECONNABORTED'
+      const noResponse = axios.isAxiosError(err) && !err.response
+      setError(
+        detail ||
+          (timedOut
+            ? 'Сервер не ответил вовремя. Запустите бэкенд (uvicorn) и проверьте порт 8000.'
+            : noResponse
+              ? 'Нет связи с сервером. Убедитесь, что API запущен на http://127.0.0.1:8000.'
+              : 'Ошибка регистрации. Попробуйте снова.'),
+      )
     } finally {
       setLoading(false)
     }
@@ -127,4 +140,3 @@ function Register() {
 }
 
 export default Register
-

@@ -2,33 +2,43 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Calendar from '../components/Calendar'
 import BottomNav from '../components/BottomNav'
-import api from '../services/api'
+import type { CalendarViewType, Medication, PeriodType } from '../types/models'
 import './MedicationSchedulePage.css'
 
 function MedicationSchedulePage() {
   const navigate = useNavigate()
-  const [medications, setMedications] = useState([])
-  const [selectedMedication, setSelectedMedication] = useState(null)
-  const [selectedDates, setSelectedDates] = useState([])
-  const [selectedTimes, setSelectedTimes] = useState([])
-  const [periodType, setPeriodType] = useState('daily')
-  const [viewType, setViewType] = useState('day')
+  const [medications, setMedications] = useState<Medication[]>([])
+  const [selectedMedication, setSelectedMedication] = useState<Medication | null>(null)
+  const [selectedDates, setSelectedDates] = useState<Date[]>([])
+  const [selectedTimes, setSelectedTimes] = useState<string[]>([])
+  const [periodType, setPeriodType] = useState<PeriodType>('daily')
+  const [viewType, setViewType] = useState<CalendarViewType>('day')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [showScheduleForm, setShowScheduleForm] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   const monthNames = [
-    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+    'Январь',
+    'Февраль',
+    'Март',
+    'Апрель',
+    'Май',
+    'Июнь',
+    'Июль',
+    'Август',
+    'Сентябрь',
+    'Октябрь',
+    'Ноябрь',
+    'Декабрь',
   ]
 
-  const timeSlots = []
+  const timeSlots: string[] = []
   for (let hour = 0; hour < 24; hour++) {
     timeSlots.push(`${hour.toString().padStart(2, '0')}:00`)
   }
 
-  const formatDate = (date) => date.toISOString().split('T')[0]
+  const formatDate = (date: Date) => date.toISOString().split('T')[0]
 
   useEffect(() => {
     const loadMedications = async () => {
@@ -57,42 +67,39 @@ function MedicationSchedulePage() {
           throw new Error('failed')
         }
 
-        const data = await response.json()
+        const data = (await response.json()) as Medication[]
         setMedications(data)
-      } catch (err) {
+      } catch {
         setError('Не удалось загрузить список лекарств')
       } finally {
         setLoading(false)
       }
     }
-    loadMedications()
+    void loadMedications()
   }, [])
 
-  const handleMedicationSelect = (medication) => {
+  const handleMedicationSelect = (medication: Medication) => {
     setSelectedMedication(medication)
     setShowScheduleForm(true)
     setSelectedDates([])
     setSelectedTimes([])
   }
 
-  const handleDateClick = (date) => {
-    setSelectedDates(prev => {
+  const handleDateClick = (date: Date) => {
+    setSelectedDates((prev) => {
       const dateStr = date.toISOString().split('T')[0]
-      const existingIndex = prev.findIndex(d => d.toISOString().split('T')[0] === dateStr)
-      
+      const existingIndex = prev.findIndex((d) => d.toISOString().split('T')[0] === dateStr)
+
       if (existingIndex >= 0) {
         return prev.filter((_, index) => index !== existingIndex)
-      } else {
-        return [...prev, date].sort((a, b) => a - b)
       }
+      return [...prev, date].sort((a, b) => a.getTime() - b.getTime())
     })
   }
 
-  const toggleTime = (time) => {
-    setSelectedTimes(prev => 
-      prev.includes(time) 
-        ? prev.filter(t => t !== time).sort()
-        : [...prev, time].sort()
+  const toggleTime = (time: string) => {
+    setSelectedTimes((prev) =>
+      prev.includes(time) ? prev.filter((t) => t !== time).sort() : [...prev, time].sort(),
     )
   }
 
@@ -120,7 +127,7 @@ function MedicationSchedulePage() {
       alert('Выберите хотя бы одно время приема')
       return
     }
-    
+
     try {
       const token = localStorage.getItem('access_token')
       if (!token) {
@@ -128,20 +135,20 @@ function MedicationSchedulePage() {
         return
       }
 
-      const sortedDates = [...selectedDates].sort((a, b) => a - b)
-      // Получаем выбранного члена семьи из localStorage (0 = главный пользователь)
+      const sortedDates = [...selectedDates].sort((a, b) => a.getTime() - b.getTime())
       const selectedFamilyMember = localStorage.getItem('selectedFamilyMember')
-      const familyMemberId = selectedFamilyMember && selectedFamilyMember !== '0' 
-        ? parseInt(selectedFamilyMember, 10) 
-        : null
-      
+      const familyMemberId =
+        selectedFamilyMember && selectedFamilyMember !== '0'
+          ? parseInt(selectedFamilyMember, 10)
+          : null
+
       const payload = {
         medication_id: selectedMedication.id,
         start_date: formatDate(sortedDates[0]),
         end_date: formatDate(sortedDates[sortedDates.length - 1]),
         times: selectedTimes,
         period_type: periodType,
-        ...(familyMemberId && { family_member_id: familyMemberId })
+        ...(familyMemberId && { family_member_id: familyMemberId }),
       }
 
       const base = 'http://localhost:8000/api/v1'
@@ -164,12 +171,12 @@ function MedicationSchedulePage() {
       setSelectedMedication(null)
       setSelectedDates([])
       setSelectedTimes([])
-    } catch (err) {
+    } catch {
       setError('Не удалось сохранить расписание')
     }
   }
 
-  const navigateMonth = (direction) => {
+  const navigateMonth = (direction: number) => {
     const newDate = new Date(currentDate)
     newDate.setMonth(currentDate.getMonth() + direction)
     setCurrentDate(newDate)
@@ -194,9 +201,15 @@ function MedicationSchedulePage() {
 
           <div className="calendar-section">
             <div className="calendar-header-controls">
-              <button onClick={() => navigateMonth(-1)} className="nav-btn">‹</button>
-              <h3>{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</h3>
-              <button onClick={() => navigateMonth(1)} className="nav-btn">›</button>
+              <button onClick={() => navigateMonth(-1)} className="nav-btn">
+                ‹
+              </button>
+              <h3>
+                {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+              </h3>
+              <button onClick={() => navigateMonth(1)} className="nav-btn">
+                ›
+              </button>
             </div>
 
             <div className="view-toggle-section">
@@ -214,8 +227,8 @@ function MedicationSchedulePage() {
               </button>
             </div>
 
-            <Calendar 
-              viewType={viewType} 
+            <Calendar
+              viewType={viewType}
               selectedDate={selectedDates[0] || currentDate}
               selectedDates={selectedDates}
               onDateSelect={handleDateClick}
@@ -226,13 +239,10 @@ function MedicationSchedulePage() {
           <div className="time-selection">
             <h3>Время приема</h3>
             <div className="time-grid">
-              <button 
-                className="time-slot add-time" 
-                onClick={handleAddCustomTime}
-              >
+              <button className="time-slot add-time" onClick={handleAddCustomTime}>
                 +
               </button>
-              {timeSlots.map(time => (
+              {timeSlots.map((time) => (
                 <button
                   key={time}
                   className={`time-slot ${selectedTimes.includes(time) ? 'selected' : ''}`}
@@ -262,7 +272,7 @@ function MedicationSchedulePage() {
             </div>
           </div>
 
-          <button onClick={handleSubmitSchedule} className="submit-btn">
+          <button onClick={() => void handleSubmitSchedule()} className="submit-btn">
             Добавить
           </button>
         </div>
@@ -282,8 +292,10 @@ function MedicationSchedulePage() {
       <div className="container">
         <div className="schedule-content">
           <h2>Выберите лекарство для добавления в расписание</h2>
-          <p className="info-text">Выберите лекарство из списка, чтобы настроить расписание его приема</p>
-          
+          <p className="info-text">
+            Выберите лекарство из списка, чтобы настроить расписание его приема
+          </p>
+
           {error && <div className="error-message">{error}</div>}
 
           <div className="medications-grid">
@@ -292,10 +304,7 @@ function MedicationSchedulePage() {
             ) : medications.length === 0 ? (
               <div className="empty-state">
                 <p>У вас пока нет лекарств</p>
-                <button 
-                  className="btn-primary"
-                  onClick={() => navigate('/medications')}
-                >
+                <button className="btn-primary" onClick={() => navigate('/medications')}>
                   Перейти в каталог лекарств
                 </button>
               </div>

@@ -2,15 +2,21 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import BottomNav from '../components/BottomNav'
 import api, { clearTokens } from '../services/api'
+import type { FamilyMemberApi, UserProfile } from '../types/models'
 import './Profile.css'
+
+interface MeResponse {
+  user: UserProfile
+  family_members?: FamilyMemberApi[]
+}
 
 function Profile() {
   const navigate = useNavigate()
-  const [user, setUser] = useState({
+  const [user, setUser] = useState<UserProfile>({
     name: '',
-    phone: ''
+    phone: '',
   })
-  const [familyMembers, setFamilyMembers] = useState([])
+  const [familyMembers, setFamilyMembers] = useState<FamilyMemberApi[]>([])
   const [smsNotifications, setSmsNotifications] = useState(true)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -18,17 +24,17 @@ function Profile() {
   useEffect(() => {
     const loadProfile = async () => {
       try {
-        const response = await api.get('/users/me')
+        const response = await api.get<MeResponse>('/users/me')
         setUser(response.data.user)
         setFamilyMembers(response.data.family_members || [])
-        setSmsNotifications(response.data.user.sms_notifications)
-      } catch (err) {
+        setSmsNotifications(!!response.data.user.sms_notifications)
+      } catch {
         setError('Не удалось загрузить профиль')
       } finally {
         setLoading(false)
       }
     }
-    loadProfile()
+    void loadProfile()
   }, [])
 
   const handleAddFamilyMember = async () => {
@@ -36,17 +42,19 @@ function Profile() {
     const phone = prompt('Телефон члена семьи')
     if (!name || !phone) return
     try {
-      const response = await api.post('/users/me/family', { name, phone })
+      const response = await api.post<FamilyMemberApi>('/users/me/family', { name, phone })
       setFamilyMembers((prev) => [...prev, response.data])
     } catch {
       setError('Не удалось добавить члена семьи')
     }
   }
 
-  const handleSmsToggle = async (checked) => {
+  const handleSmsToggle = async (checked: boolean) => {
     setSmsNotifications(checked)
     try {
-      const response = await api.put('/users/me', { sms_notifications: checked })
+      const response = await api.put<{ sms_notifications: boolean }>('/users/me', {
+        sms_notifications: checked,
+      })
       setUser((prev) => ({ ...prev, sms_notifications: response.data.sms_notifications }))
     } catch {
       setSmsNotifications(!checked)
@@ -91,7 +99,7 @@ function Profile() {
                 </div>
               ))}
             </div>
-            <button className="invite-btn" onClick={handleAddFamilyMember}>
+            <button className="invite-btn" onClick={() => void handleAddFamilyMember()}>
               Пригласить
             </button>
           </div>
@@ -104,7 +112,7 @@ function Profile() {
               <input
                 type="checkbox"
                 checked={smsNotifications}
-                onChange={(e) => handleSmsToggle(e.target.checked)}
+                onChange={(e) => void handleSmsToggle(e.target.checked)}
                 className="sms-checkbox"
               />
             </label>

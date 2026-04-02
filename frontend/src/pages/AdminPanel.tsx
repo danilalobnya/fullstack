@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
 import './AdminPanel.css'
 import BottomNav from '../components/BottomNav'
+import type { AdminUser } from '../types/models'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
 
 function AdminPanel() {
-  const [users, setUsers] = useState([])
+  const [users, setUsers] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [updatingId, setUpdatingId] = useState(null)
-  const [revokingId, setRevokingId] = useState(null)
+  const [updatingId, setUpdatingId] = useState<number | null>(null)
+  const [revokingId, setRevokingId] = useState<number | null>(null)
 
   const loadUsers = async () => {
     try {
@@ -34,9 +35,9 @@ function AdminPanel() {
         throw new Error('failed')
       }
 
-      const data = await response.json()
+      const data = (await response.json()) as AdminUser[]
       setUsers(data)
-    } catch (e) {
+    } catch {
       setError('Не удалось загрузить список пользователей')
     } finally {
       setLoading(false)
@@ -44,10 +45,10 @@ function AdminPanel() {
   }
 
   useEffect(() => {
-    loadUsers()
+    void loadUsers()
   }, [])
 
-  const handleChangeRole = async (userId, newRole) => {
+  const handleChangeRole = async (userId: number, newRole: string) => {
     try {
       setUpdatingId(userId)
       const token = localStorage.getItem('access_token')
@@ -70,16 +71,16 @@ function AdminPanel() {
         throw new Error('failed')
       }
 
-      const updated = await response.json()
+      const updated = (await response.json()) as AdminUser
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)))
-    } catch (e) {
+    } catch {
       setError('Не удалось обновить роль пользователя')
     } finally {
       setUpdatingId(null)
     }
   }
 
-  const handleRevokeSessions = async (userId) => {
+  const handleRevokeSessions = async (userId: number) => {
     if (!window.confirm('Отозвать все сессии этого пользователя?')) return
 
     try {
@@ -104,7 +105,7 @@ function AdminPanel() {
       }
 
       setError('')
-    } catch (e) {
+    } catch {
       setError('Не удалось отозвать сессии пользователя')
     } finally {
       setRevokingId(null)
@@ -144,7 +145,7 @@ function AdminPanel() {
                     <select
                       value={user.role}
                       disabled={updatingId === user.id}
-                      onChange={(e) => handleChangeRole(user.id, e.target.value)}
+                      onChange={(e) => void handleChangeRole(user.id, e.target.value)}
                     >
                       <option value="user">user</option>
                       <option value="admin">admin</option>
@@ -154,7 +155,7 @@ function AdminPanel() {
                     <button
                       type="button"
                       disabled={revokingId === user.id}
-                      onClick={() => handleRevokeSessions(user.id)}
+                      onClick={() => void handleRevokeSessions(user.id)}
                     >
                       {revokingId === user.id ? 'Сброс...' : 'Сбросить сессии'}
                     </button>
@@ -172,5 +173,3 @@ function AdminPanel() {
 }
 
 export default AdminPanel
-
-

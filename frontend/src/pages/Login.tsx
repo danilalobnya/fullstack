@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import axios from 'axios'
 import api, { setTokens, clearTokens } from '../services/api'
 import './Auth.css'
 
@@ -11,19 +12,32 @@ function Login() {
   const [error, setError] = useState('')
   const navigate = useNavigate()
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
-    
+
     try {
       const response = await api.post('/auth/login', { phone, password })
       setTokens(response.data)
       window.dispatchEvent(new Event('auth-changed'))
       navigate('/')
-    } catch (err) {
+    } catch (err: unknown) {
       clearTokens()
-      setError(err.response?.data?.detail || 'Неверный номер телефона или пароль')
+      const detail = axios.isAxiosError(err)
+        ? (err.response?.data as { detail?: string } | undefined)?.detail
+        : undefined
+      const timedOut = axios.isAxiosError(err) && err.code === 'ECONNABORTED'
+      const noResponse = axios.isAxiosError(err) && !err.response
+      setError(
+        detail ||
+          (timedOut
+            ? 'Сервер не ответил вовремя. Запустите бэкенд (uvicorn) и проверьте порт 8000.'
+            : noResponse
+              ? 'Нет связи с сервером. Убедитесь, что API запущен на http://127.0.0.1:8000.'
+              : 'Неверный номер телефона или пароль'),
+      )
+    } finally {
       setLoading(false)
     }
   }
@@ -46,7 +60,7 @@ function Login() {
               className="form-input"
             />
           </div>
-          
+
           <div className="form-group">
             <label htmlFor="password">Пароль:</label>
             <div className="password-input-wrapper">

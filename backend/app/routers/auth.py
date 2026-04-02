@@ -25,7 +25,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
 @router.post("/login", response_model=TokenPairResponse)
-async def login(credentials: LoginRequest, db: Session = Depends(get_db)):
+def login(credentials: LoginRequest, db: Session = Depends(get_db)):
     """
     Вход в систему
     Проверка номера телефона и пароля
@@ -57,7 +57,7 @@ async def login(credentials: LoginRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/register", response_model=UserResponse)
-async def register(user_data: RegisterRequest, db: Session = Depends(get_db)):
+def register(user_data: RegisterRequest, db: Session = Depends(get_db)):
     """
     Регистрация нового пользователя
     Создает аккаунт с номером телефона, паролем и именем
@@ -84,7 +84,7 @@ async def register(user_data: RegisterRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/refresh", response_model=TokenPairResponse)
-async def refresh_token(data: RefreshRequest, db: Session = Depends(get_db)):
+def refresh_token(data: RefreshRequest, db: Session = Depends(get_db)):
     """
     Обновление токена
     """

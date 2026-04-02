@@ -31,7 +31,12 @@ try:
 except Exception:
     pass
 
-engine = create_engine(settings.database_url, future=True)
+_sqlite = settings.database_url.startswith("sqlite")
+_engine_kwargs: dict = {"future": True}
+if _sqlite:
+    _engine_kwargs["connect_args"] = {"check_same_thread": False}
+
+engine = create_engine(settings.database_url, **_engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine, future=True)
 Base = declarative_base()
 

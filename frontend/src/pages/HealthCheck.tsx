@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
+import type { DetailedHealthPayload, HealthPayload } from '../types/models'
 import './HealthCheck.css'
 
 function HealthCheck() {
-  const [healthData, setHealthData] = useState(null)
-  const [detailedHealth, setDetailedHealth] = useState(null)
+  const [healthData, setHealthData] = useState<HealthPayload | null>(null)
+  const [detailedHealth, setDetailedHealth] = useState<DetailedHealthPayload | null>(null)
   const [loading, setLoading] = useState(true)
 
   const fetchHealthData = async () => {
@@ -11,11 +12,11 @@ function HealthCheck() {
     try {
       const [healthRes, detailedRes] = await Promise.all([
         fetch('/api/health'),
-        fetch('/api/health/detailed')
+        fetch('/api/health/detailed'),
       ])
       if (!healthRes.ok || !detailedRes.ok) throw new Error('Health check failed')
-      const healthJson = await healthRes.json()
-      const detailedJson = await detailedRes.json()
+      const healthJson = (await healthRes.json()) as HealthPayload
+      const detailedJson = (await detailedRes.json()) as DetailedHealthPayload
       setHealthData(healthJson)
       setDetailedHealth(detailedJson)
     } catch (err) {
@@ -26,7 +27,7 @@ function HealthCheck() {
   }
 
   useEffect(() => {
-    fetchHealthData()
+    void fetchHealthData()
   }, [])
 
   return (
@@ -35,7 +36,7 @@ function HealthCheck() {
         <div className="header-section">
           <h1>Health Check</h1>
           <p>Проверка работоспособности сервера</p>
-          <button onClick={fetchHealthData} className="refresh-btn" disabled={loading}>
+          <button onClick={() => void fetchHealthData()} className="refresh-btn" disabled={loading}>
             {loading ? 'Проверка...' : 'Обновить'}
           </button>
         </div>
@@ -48,9 +49,16 @@ function HealthCheck() {
               <h2>Базовый Health Check</h2>
               {healthData && (
                 <div className="health-info">
-                  <p><strong>Статус:</strong> <span className="status-ok">{healthData.status}</span></p>
-                  <p><strong>Сервис:</strong> {healthData.service}</p>
-                  <p><strong>Время:</strong> {new Date(healthData.timestamp).toLocaleString('ru-RU')}</p>
+                  <p>
+                    <strong>Статус:</strong>{' '}
+                    <span className="status-ok">{healthData.status}</span>
+                  </p>
+                  <p>
+                    <strong>Сервис:</strong> {healthData.service}
+                  </p>
+                  <p>
+                    <strong>Время:</strong> {new Date(healthData.timestamp).toLocaleString('ru-RU')}
+                  </p>
                 </div>
               )}
             </div>
@@ -59,9 +67,17 @@ function HealthCheck() {
               <h2>Подробный Health Check</h2>
               {detailedHealth && (
                 <div className="health-info">
-                  <p><strong>Статус:</strong> <span className="status-ok">{detailedHealth.status}</span></p>
-                  <p><strong>Сервис:</strong> {detailedHealth.service}</p>
-                  <p><strong>Время:</strong> {new Date(detailedHealth.timestamp).toLocaleString('ru-RU')}</p>
+                  <p>
+                    <strong>Статус:</strong>{' '}
+                    <span className="status-ok">{detailedHealth.status}</span>
+                  </p>
+                  <p>
+                    <strong>Сервис:</strong> {detailedHealth.service}
+                  </p>
+                  <p>
+                    <strong>Время:</strong>{' '}
+                    {new Date(detailedHealth.timestamp).toLocaleString('ru-RU')}
+                  </p>
                   <div className="components">
                     <h3>Компоненты:</h3>
                     <ul>

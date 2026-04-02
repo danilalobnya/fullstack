@@ -2,31 +2,49 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import BottomNav from '../components/BottomNav'
 import CreateMedicationModal from '../components/CreateMedicationModal'
+import type { Medication } from '../types/models'
 import './Medications.css'
 
 function MedicationList() {
   const navigate = useNavigate()
-  const [medications, setMedications] = useState([])
+  const [medications, setMedications] = useState<Medication[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [showModal, setShowModal] = useState(false)
-  const [selectedMedication, setSelectedMedication] = useState(null)
+  const [selectedMedication, setSelectedMedication] = useState<Medication | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // TODO: Загрузить лекарства из API
     setMedications([
-      { id: 1, name: 'Коллаген морской', quantity: '1 капсула', description: 'описание описание описание описание описание описание описание' },
-      { id: 2, name: 'Магния цитрат', quantity: '2 таблетки', description: 'описание описание описание описание описание описание описание' },
-      { id: 3, name: 'Omega-3', quantity: '1 капсула', description: 'описание описание описание описание описание описание описание' }
+      {
+        id: 1,
+        name: 'Коллаген морской',
+        quantity: '1 капсула',
+        description:
+          'описание описание описание описание описание описание описание',
+      },
+      {
+        id: 2,
+        name: 'Магния цитрат',
+        quantity: '2 таблетки',
+        description:
+          'описание описание описание описание описание описание описание',
+      },
+      {
+        id: 3,
+        name: 'Omega-3',
+        quantity: '1 капсула',
+        description:
+          'описание описание описание описание описание описание описание',
+      },
     ])
     setLoading(false)
   }, [])
 
-  const filteredMedications = medications.filter(med => 
-    med.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredMedications = medications.filter((med) =>
+    med.name.toLowerCase().includes(searchQuery.toLowerCase()),
   )
 
-  const handleMedicationClick = (medication) => {
+  const handleMedicationClick = (medication: Medication) => {
     setSelectedMedication(medication)
     navigate(`/medications/${medication.id}/schedule`)
   }
@@ -41,10 +59,7 @@ function MedicationList() {
         <div className="medications-content">
           <div className="list-header">
             <h2>Список созданных лекарств</h2>
-            <button 
-              className="add-btn"
-              onClick={() => setShowModal(true)}
-            >
+            <button className="add-btn" onClick={() => setShowModal(true)}>
               +
             </button>
           </div>
@@ -66,13 +81,15 @@ function MedicationList() {
             ) : filteredMedications.length === 0 ? (
               <div className="empty-state">Лекарств не найдено</div>
             ) : (
-              filteredMedications.map((medication, index) => (
+              filteredMedications.map((medication) => (
                 <div
                   key={medication.id}
                   className={`medication-item ${selectedMedication?.id === medication.id ? 'selected' : ''}`}
                   onClick={() => handleMedicationClick(medication)}
                 >
-                  <div className="medication-name">{medication.name}, {medication.quantity}</div>
+                  <div className="medication-name">
+                    {medication.name}, {medication.quantity}
+                  </div>
                   <div className="medication-description">{medication.description}</div>
                 </div>
               ))
@@ -81,9 +98,7 @@ function MedicationList() {
         </div>
       </div>
 
-      {showModal && (
-        <CreateMedicationModal onClose={() => setShowModal(false)} />
-      )}
+      {showModal && <CreateMedicationModal onClose={() => setShowModal(false)} />}
 
       <BottomNav />
     </div>

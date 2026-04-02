@@ -2,34 +2,43 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Calendar from '../components/Calendar'
 import BottomNav from '../components/BottomNav'
-import api from '../services/api'
+import type { CalendarViewType, Medication, PeriodType } from '../types/models'
 import './MedicationSchedule.css'
 
 function MedicationSchedule() {
-  const { id } = useParams()
+  const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const [selectedMedication, setSelectedMedication] = useState(null)
-  const [medications, setMedications] = useState([])
-  const [selectedDates, setSelectedDates] = useState([])
-  const [selectedTimes, setSelectedTimes] = useState([])
-  const [periodType, setPeriodType] = useState('daily') // daily или every_other_day
-  const [viewType, setViewType] = useState('day')
+  const [selectedMedication, setSelectedMedication] = useState<Medication | null>(null)
+  const [medications, setMedications] = useState<Medication[]>([])
+  const [selectedDates, setSelectedDates] = useState<Date[]>([])
+  const [selectedTimes, setSelectedTimes] = useState<string[]>([])
+  const [periodType, setPeriodType] = useState<PeriodType>('daily')
+  const [viewType, setViewType] = useState<CalendarViewType>('day')
   const [currentDate, setCurrentDate] = useState(new Date())
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
 
   const monthNames = [
-    'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
-    'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'
+    'Январь',
+    'Февраль',
+    'Март',
+    'Апрель',
+    'Май',
+    'Июнь',
+    'Июль',
+    'Август',
+    'Сентябрь',
+    'Октябрь',
+    'Ноябрь',
+    'Декабрь',
   ]
 
-  // Генерация временных слотов
-  const timeSlots = []
+  const timeSlots: string[] = []
   for (let hour = 0; hour < 24; hour++) {
     timeSlots.push(`${hour.toString().padStart(2, '0')}:00`)
   }
 
-  const formatDate = (date) => date.toISOString().split('T')[0]
+  const formatDate = (date: Date) => date.toISOString().split('T')[0]
 
   useEffect(() => {
     const loadMedications = async () => {
@@ -58,7 +67,7 @@ function MedicationSchedule() {
           throw new Error('failed')
         }
 
-        const data = await response.json()
+        const data = (await response.json()) as Medication[]
         setMedications(data)
         if (id) {
           const med = data.find((m) => m.id === parseInt(id, 10))
@@ -66,36 +75,30 @@ function MedicationSchedule() {
         } else if (data.length > 0) {
           setSelectedMedication(data[0])
         }
-      } catch (err) {
+      } catch {
         setError('Не удалось загрузить список лекарств')
       } finally {
         setLoading(false)
       }
     }
-    loadMedications()
+    void loadMedications()
   }, [id])
 
-  const handleDateClick = (date) => {
-    // Множественный выбор дат
-    setSelectedDates(prev => {
+  const handleDateClick = (date: Date) => {
+    setSelectedDates((prev) => {
       const dateStr = date.toISOString().split('T')[0]
-      const existingIndex = prev.findIndex(d => d.toISOString().split('T')[0] === dateStr)
-      
+      const existingIndex = prev.findIndex((d) => d.toISOString().split('T')[0] === dateStr)
+
       if (existingIndex >= 0) {
-        // Удаляем дату, если она уже выбрана
         return prev.filter((_, index) => index !== existingIndex)
-      } else {
-        // Добавляем дату
-        return [...prev, date].sort((a, b) => a - b)
       }
+      return [...prev, date].sort((a, b) => a.getTime() - b.getTime())
     })
   }
 
-  const toggleTime = (time) => {
-    setSelectedTimes(prev => 
-      prev.includes(time) 
-        ? prev.filter(t => t !== time).sort()
-        : [...prev, time].sort()
+  const toggleTime = (time: string) => {
+    setSelectedTimes((prev) =>
+      prev.includes(time) ? prev.filter((t) => t !== time).sort() : [...prev, time].sort(),
     )
   }
 
@@ -123,7 +126,7 @@ function MedicationSchedule() {
       alert('Выберите хотя бы одно время приема')
       return
     }
-    
+
     try {
       const token = localStorage.getItem('access_token')
       if (!token) {
@@ -131,20 +134,20 @@ function MedicationSchedule() {
         return
       }
 
-      const sortedDates = [...selectedDates].sort((a, b) => a - b)
-      // Получаем выбранного члена семьи из localStorage (0 = главный пользователь)
+      const sortedDates = [...selectedDates].sort((a, b) => a.getTime() - b.getTime())
       const selectedFamilyMember = localStorage.getItem('selectedFamilyMember')
-      const familyMemberId = selectedFamilyMember && selectedFamilyMember !== '0' 
-        ? parseInt(selectedFamilyMember, 10) 
-        : null
-      
+      const familyMemberId =
+        selectedFamilyMember && selectedFamilyMember !== '0'
+          ? parseInt(selectedFamilyMember, 10)
+          : null
+
       const payload = {
         medication_id: selectedMedication.id,
         start_date: formatDate(sortedDates[0]),
         end_date: formatDate(sortedDates[sortedDates.length - 1]),
         times: selectedTimes,
         period_type: periodType,
-        ...(familyMemberId && { family_member_id: familyMemberId })
+        ...(familyMemberId && { family_member_id: familyMemberId }),
       }
 
       const base = 'http://localhost:8000/api/v1'
@@ -164,12 +167,12 @@ function MedicationSchedule() {
 
       alert('Лекарство добавлено в расписание!')
       navigate('/')
-    } catch (err) {
+    } catch {
       setError('Не удалось сохранить расписание')
     }
   }
 
-  const navigateMonth = (direction) => {
+  const navigateMonth = (direction: number) => {
     const newDate = new Date(currentDate)
     newDate.setMonth(currentDate.getMonth() + direction)
     setCurrentDate(newDate)
@@ -196,27 +199,36 @@ function MedicationSchedule() {
 
         <div className="medication-selection">
           <div className="selection-banner">Выбор лекарства из списка</div>
-          <select 
+          <select
             className="medication-select"
             value={selectedMedication?.id || ''}
             onChange={(e) => {
-              const med = medications.find(m => m.id === parseInt(e.target.value, 10))
+              const med = medications.find((m) => m.id === parseInt(e.target.value, 10))
               if (med) setSelectedMedication(med)
             }}
             disabled={loading || medications.length === 0}
           >
             {loading && <option>Загрузка...</option>}
-            {!loading && medications.map(med => (
-              <option key={med.id} value={med.id}>{med.name}</option>
-            ))}
+            {!loading &&
+              medications.map((med) => (
+                <option key={med.id} value={med.id}>
+                  {med.name}
+                </option>
+              ))}
           </select>
         </div>
 
         <div className="calendar-section">
           <div className="calendar-header-controls">
-            <button onClick={() => navigateMonth(-1)} className="nav-btn">‹</button>
-            <h3>{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</h3>
-            <button onClick={() => navigateMonth(1)} className="nav-btn">›</button>
+            <button onClick={() => navigateMonth(-1)} className="nav-btn">
+              ‹
+            </button>
+            <h3>
+              {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
+            </h3>
+            <button onClick={() => navigateMonth(1)} className="nav-btn">
+              ›
+            </button>
           </div>
 
           <div className="view-toggle-section">
@@ -234,8 +246,8 @@ function MedicationSchedule() {
             </button>
           </div>
 
-          <Calendar 
-            viewType={viewType} 
+          <Calendar
+            viewType={viewType}
             selectedDate={selectedDates[0] || currentDate}
             selectedDates={selectedDates}
             onDateSelect={handleDateClick}
@@ -248,13 +260,10 @@ function MedicationSchedule() {
         <div className="time-selection">
           <h3>Время приема</h3>
           <div className="time-grid">
-            <button 
-              className="time-slot add-time" 
-              onClick={handleAddCustomTime}
-            >
+            <button className="time-slot add-time" onClick={handleAddCustomTime}>
               +
             </button>
-            {timeSlots.map(time => (
+            {timeSlots.map((time) => (
               <button
                 key={time}
                 className={`time-slot ${selectedTimes.includes(time) ? 'selected' : ''}`}
@@ -284,7 +293,7 @@ function MedicationSchedule() {
           </div>
         </div>
 
-        <button onClick={handleSubmit} className="submit-btn">
+        <button onClick={() => void handleSubmit()} className="submit-btn">
           Добавить
         </button>
       </div>

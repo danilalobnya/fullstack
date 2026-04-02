@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react'
 import BottomNav from '../components/BottomNav'
 import CreateMedicationModal from '../components/CreateMedicationModal'
 import api from '../services/api'
+import type { Medication } from '../types/models'
 import './Medications.css'
 
 function MedicationList() {
-  const [medications, setMedications] = useState([])
+  const [medications, setMedications] = useState<Medication[]>([])
   const [searchQuery, setSearchQuery] = useState('')
   const [showModal, setShowModal] = useState(false)
-  const [selectedMedication, setSelectedMedication] = useState(null)
+  const [selectedMedication, setSelectedMedication] = useState<Medication | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -39,9 +40,9 @@ function MedicationList() {
         throw new Error('failed')
       }
 
-      const data = await response.json()
+      const data = (await response.json()) as Medication[]
       setMedications(data)
-    } catch (err) {
+    } catch {
       setError('Не удалось загрузить лекарства')
     } finally {
       setLoading(false)
@@ -49,36 +50,39 @@ function MedicationList() {
   }
 
   useEffect(() => {
-    fetchMedications()
+    void fetchMedications()
   }, [searchQuery])
 
-  const filteredMedications = medications.filter(med => 
-    med.name.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredMedications = medications.filter((med) =>
+    med.name.toLowerCase().includes(searchQuery.toLowerCase()),
   )
 
-  const handleMedicationClick = (medication) => {
+  const handleMedicationClick = (medication: Medication) => {
     setSelectedMedication(medication)
   }
 
-  const handleEdit = (medication, e) => {
+  const handleEdit = (medication: Medication, e: React.MouseEvent) => {
     e.stopPropagation()
     setSelectedMedication(medication)
     setShowModal(true)
   }
 
-  const handleDelete = (medication, e) => {
+  const handleDelete = (medication: Medication, e: React.MouseEvent) => {
     e.stopPropagation()
     if (window.confirm(`Вы уверены, что хотите удалить "${medication.name}"?`)) {
-      api.delete(`/medications/${medication.id}`).then(() => {
-      setMedications(prev => prev.filter(m => m.id !== medication.id))
-      }).catch(() => setError('Не удалось удалить лекарство'))
+      api
+        .delete(`/medications/${medication.id}`)
+        .then(() => {
+          setMedications((prev) => prev.filter((m) => m.id !== medication.id))
+        })
+        .catch(() => setError('Не удалось удалить лекарство'))
     }
   }
 
   const handleMedicationSaved = () => {
     setSelectedMedication(null)
     setShowModal(false)
-    fetchMedications()
+    void fetchMedications()
   }
 
   return (
@@ -91,7 +95,7 @@ function MedicationList() {
         <div className="medications-content">
           <div className="list-header">
             <h2>Список созданных лекарств</h2>
-            <button 
+            <button
               className="add-btn"
               onClick={() => {
                 setSelectedMedication(null)
@@ -127,19 +131,15 @@ function MedicationList() {
                   className={`medication-item ${selectedMedication?.id === medication.id ? 'selected' : ''}`}
                   onClick={() => handleMedicationClick(medication)}
                 >
-                  <div className="medication-name">{medication.name}, {medication.quantity}</div>
+                  <div className="medication-name">
+                    {medication.name}, {medication.quantity}
+                  </div>
                   <div className="medication-description">{medication.description}</div>
                   <div className="medication-actions">
-                    <button 
-                      className="action-btn edit-btn"
-                      onClick={(e) => handleEdit(medication, e)}
-                    >
+                    <button className="action-btn edit-btn" onClick={(e) => handleEdit(medication, e)}>
                       Редактировать
                     </button>
-                    <button 
-                      className="action-btn delete-btn"
-                      onClick={(e) => handleDelete(medication, e)}
-                    >
+                    <button className="action-btn delete-btn" onClick={(e) => handleDelete(medication, e)}>
                       Удалить
                     </button>
                   </div>
@@ -164,4 +164,3 @@ function MedicationList() {
 }
 
 export default MedicationList
-

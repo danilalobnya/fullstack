@@ -5,30 +5,28 @@ function BottomNav() {
   const location = useLocation()
   const role = localStorage.getItem('user_role') || 'user'
 
-  const isActive = (path) => {
-    // Точное совпадение
+  const isActive = (path: string) => {
     if (path === location.pathname) return true
-    
-    // Для страницы расписания лекарств - должна подсвечиваться на всех страницах с /schedule
+
     if (path === '/medications/schedule') {
-      // Подсвечиваем на /medications/schedule и /medications/:id/schedule
-      return location.pathname === '/medications/schedule' || 
-             (location.pathname.startsWith('/medications/') && location.pathname.endsWith('/schedule'))
+      return (
+        location.pathname === '/medications/schedule' ||
+        (location.pathname.startsWith('/medications/') && location.pathname.endsWith('/schedule'))
+      )
     }
-    
-    // Для каталога лекарств - только точное совпадение /medications (без schedule)
+
     if (path === '/medications') {
       return location.pathname === '/medications'
     }
-    
+
     return false
   }
 
-  const navItems = [
+  const navItems: { path: string; label: string; icon: string }[] = [
     { path: '/', label: 'главная', icon: '📊' },
     { path: '/medications/schedule', label: 'лекарства', icon: '💊' },
     { path: '/medications', label: 'каталог лекарств', icon: '📋' },
-    { path: '/profile', label: 'профиль', icon: '👤' }
+    { path: '/profile', label: 'профиль', icon: '👤' },
   ]
 
   if (role === 'admin') {
@@ -52,4 +50,3 @@ function BottomNav() {
 }
 
 export default BottomNav
-

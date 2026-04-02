@@ -7,14 +7,16 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api/health': {
-        target: 'http://localhost:8000',
+        target: 'http://127.0.0.1:8000',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
+        rewrite: (path) => path.replace(/^\/api/, ''),
+        proxyTimeout: 35_000,
       },
       '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true
-      }
-    }
-  }
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+        proxyTimeout: 35_000,
+      },
+    },
+  },
 })
