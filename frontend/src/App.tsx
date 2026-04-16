@@ -6,6 +6,7 @@ import Register from './pages/Register'
 import Home from './pages/Home'
 import Profile from './pages/Profile'
 import MedicationList from './pages/MedicationList'
+import MedicationDetail from './pages/MedicationDetail'
 import MedicationSchedule from './pages/MedicationSchedule'
 import MedicationSchedulePage from './pages/MedicationSchedulePage'
 import AdminPanel from './pages/AdminPanel'
@@ -45,8 +46,9 @@ function App() {
           <Route path="/" element={requireAuth(<Home />)} />
           <Route path="/profile" element={requireAuth(<Profile />)} />
           <Route path="/medications/schedule" element={requireAuth(<MedicationSchedulePage />)} />
-          <Route path="/medications" element={requireAuth(<MedicationList />)} />
           <Route path="/medications/:id/schedule" element={requireAuth(<MedicationSchedule />)} />
+          <Route path="/medications/:id" element={requireAuth(<MedicationDetail />)} />
+          <Route path="/medications" element={requireAuth(<MedicationList />)} />
           <Route path="/admin" element={requireRole(['admin'], <AdminPanel />)} />
 
           <Route path="/health" element={<HealthCheck />} />

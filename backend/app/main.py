@@ -6,7 +6,7 @@ from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.routers import appointments, auth, health, medications, schedules, users
+from app.routers import appointments, auth, health, medication_files, medications, schedules, users
 from app.database import Base, engine
 
 _SWAGGER_STATIC_DIR = Path(__file__).resolve().parent / "static" / "swagger-ui"
@@ -55,6 +55,7 @@ app.include_router(health.router, tags=["Health"])
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 app.include_router(appointments.router, prefix="/api/v1")
+app.include_router(medication_files.router, prefix="/api/v1")
 app.include_router(medications.router, prefix="/api/v1")
 app.include_router(schedules.router, prefix="/api/v1")
 

@@ -90,8 +90,17 @@
   padding: 1rem;
   border-radius: 4px;
   margin-bottom: 0.5rem;
-  cursor: pointer;
   transition: all 0.3s;
+}
+
+.medication-item-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+}
+
+.medication-item-link:hover .medication-name {
+  color: #1976d2;
 }
 
 .medication-item:last-child {
@@ -156,4 +165,101 @@
   text-align: center;
   padding: 2rem;
   color: #999;
+}
+
+.filters-panel {
+  margin-bottom: 1.25rem;
+  padding: 1rem;
+  background: #fafafa;
+  border-radius: 8px;
+  border: 1px solid #e3f2fd;
+}
+
+.filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem 1rem;
+}
+
+.filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.filter-field .form-input,
+.filter-field .form-select {
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.95rem;
+}
+
+.filters-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.filters-url-hint {
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  color: #888;
+}
+
+.btn-primary {
+  padding: 0.5rem 1rem;
+  background: #2196f3;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.btn-secondary {
+  padding: 0.5rem 1rem;
+  background: #eee;
+  color: #333;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.pagination-summary {
+  font-size: 0.9rem;
+  color: #666;
+  margin: 0 0 0.5rem;
+}
+
+.pagination-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: 0.75rem;
+}
+
+.page-btn {
+  padding: 0.4rem 0.85rem;
+  border: 1px solid #2196f3;
+  background: #fff;
+  color: #2196f3;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.page-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.page-info {
+  font-size: 0.95rem;
+  color: #333;
 }

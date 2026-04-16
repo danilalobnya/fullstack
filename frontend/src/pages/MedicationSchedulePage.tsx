@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Calendar from '../components/Calendar'
 import BottomNav from '../components/BottomNav'
-import type { CalendarViewType, Medication, PeriodType } from '../types/models'
+import api from '../services/api'
+import type { CalendarViewType, Medication, PaginatedMedications, PeriodType } from '../types/models'
 import './MedicationSchedulePage.css'
 
 function MedicationSchedulePage() {
@@ -52,23 +53,10 @@ function MedicationSchedulePage() {
           return
         }
 
-        const base = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
-        const url = new URL(`${base}/medications/`, window.location.origin)
-
-        const response = await fetch(url.toString(), {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          credentials: 'include',
+        const { data: page } = await api.get<PaginatedMedications | Medication[]>('/medications/', {
+          params: { page: 1, page_size: 500 },
         })
-
-        if (!response.ok) {
-          throw new Error('failed')
-        }
-
-        const data = (await response.json()) as Medication[]
-        setMedications(data)
+        setMedications(Array.isArray(page) ? page : page.items)
       } catch {
         setError('Не удалось загрузить список лекарств')
       } finally {

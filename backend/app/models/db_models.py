@@ -1,4 +1,4 @@
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from sqlalchemy import Boolean, Column, Date, ForeignKey, Integer, String, Time, DateTime
 from sqlalchemy.orm import relationship
@@ -51,6 +51,26 @@ class Medication(Base):
     user = relationship("User", back_populates="medications")
     appointments = relationship("Appointment", back_populates="medication", cascade="all, delete")
     schedules = relationship("Schedule", back_populates="medication", cascade="all, delete")
+    files = relationship(
+        "MedicationFile",
+        back_populates="medication",
+        cascade="all, delete-orphan",
+    )
+
+
+class MedicationFile(Base):
+    __tablename__ = "medication_files"
+
+    id = Column(Integer, primary_key=True, index=True)
+    medication_id = Column(Integer, ForeignKey("medications.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    object_key = Column(String(512), unique=True, nullable=False, index=True)
+    original_filename = Column(String(255), nullable=False)
+    content_type = Column(String(128), nullable=False)
+    size_bytes = Column(Integer, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    medication = relationship("Medication", back_populates="files")
 
 
 class Appointment(Base):

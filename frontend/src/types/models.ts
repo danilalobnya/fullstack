@@ -30,6 +30,31 @@ export interface Medication {
   take_with_food?: string
 }
 
+export type MedicationSortField = 'id' | 'name' | 'dosage' | 'quantity'
+export type SortOrder = 'asc' | 'desc'
+
+export interface PaginatedMedications {
+  items: Medication[]
+  total: number
+  page: number
+  page_size: number
+  pages: number
+}
+
+export interface MedicationFileMeta {
+  id: number
+  medication_id: number
+  original_filename: string
+  content_type: string
+  size_bytes: number
+  created_at: string
+}
+
+export interface PresignedDownload {
+  url: string
+  expires_in: number
+}
+
 export interface UserProfile {
   name: string
   phone: string
