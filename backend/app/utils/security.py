@@ -1,4 +1,5 @@
-from datetime import datetime, timedelta, timezone
+﻿from datetime import datetime, timedelta, timezone
+import secrets
 from typing import Any, Dict, Optional
 
 from jose import JWTError, jwt
@@ -23,7 +24,7 @@ def create_access_token(
 ) -> str:
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(minutes=expires_minutes)
-    to_encode.update({"exp": expire, "type": "access"})
+    to_encode.update({"exp": expire, "type": "access", "jti": secrets.token_urlsafe(8)})
     return jwt.encode(to_encode, settings.secret_key, algorithm="HS256")
 
 
@@ -33,7 +34,7 @@ def create_refresh_token(
 ) -> str:
     to_encode = data.copy()
     expire = datetime.now(timezone.utc) + timedelta(days=expires_days)
-    to_encode.update({"exp": expire, "type": "refresh"})
+    to_encode.update({"exp": expire, "type": "refresh", "jti": secrets.token_urlsafe(12)})
     return jwt.encode(to_encode, settings.secret_key, algorithm="HS256")
 
 
@@ -42,4 +43,3 @@ def decode_token(token: str) -> Optional[Dict[str, Any]]:
         return jwt.decode(token, settings.secret_key, algorithms=["HS256"])
     except JWTError:
         return None
-
