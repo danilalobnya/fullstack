@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import Calendar from '../components/Calendar'
 import BottomNav from '../components/BottomNav'
-import api from '../services/api'
-import type { CalendarViewType, Medication, PaginatedMedications, PeriodType } from '../types/models'
+import { fetchAllMedications } from '../services/api'
+import type { CalendarViewType, Medication, PeriodType } from '../types/models'
 import './MedicationSchedule.css'
 
 function MedicationSchedule() {
@@ -53,10 +53,7 @@ function MedicationSchedule() {
           return
         }
 
-        const { data: page } = await api.get<PaginatedMedications | Medication[]>('/medications/', {
-          params: { page: 1, page_size: 500 },
-        })
-        const data = Array.isArray(page) ? page : page.items
+        const data = await fetchAllMedications()
         setMedications(data)
         if (id) {
           const med = data.find((m) => m.id === parseInt(id, 10))

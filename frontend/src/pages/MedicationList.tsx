@@ -4,7 +4,15 @@ import axios from 'axios'
 import BottomNav from '../components/BottomNav'
 import CreateMedicationModal from '../components/CreateMedicationModal'
 import api from '../services/api'
-import type { Medication, MedicationSortField, PaginatedMedications, SortOrder } from '../types/models'
+import { useSeo } from '../hooks/useSeo'
+import type {
+  ExternalDrugInfoResponse,
+  ImportDrugInfoPayload,
+  Medication,
+  MedicationSortField,
+  PaginatedMedications,
+  SortOrder,
+} from '../types/models'
 import './Medications.css'
 
 type FilterForm = {
@@ -56,6 +64,12 @@ function filtersToParams(f: FilterForm): Record<string, string | number> {
 }
 
 function MedicationList() {
+  useSeo({
+    title: 'Каталог лекарств | Medication Tracker',
+    description: 'Каталог лекарств с фильтрами, поиском, сортировкой и постраничным выводом.',
+    robots: 'noindex, nofollow',
+    canonicalPath: '/medications',
+  })
   const [searchParams, setSearchParams] = useSearchParams()
   const [form, setForm] = useState<FilterForm>(() => readFilters(searchParams))
   const [data, setData] = useState<PaginatedMedications | null>(null)
@@ -63,6 +77,11 @@ function MedicationList() {
   const [selectedMedication, setSelectedMedication] = useState<Medication | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [externalQuery, setExternalQuery] = useState('')
+  const [externalLoading, setExternalLoading] = useState(false)
+  const [externalData, setExternalData] = useState<ExternalDrugInfoResponse | null>(null)
+  const [externalError, setExternalError] = useState('')
+  const [importingTitle, setImportingTitle] = useState<string | null>(null)
 
   useEffect(() => {
     setForm(readFilters(searchParams))
@@ -166,6 +185,55 @@ function MedicationList() {
     setSelectedMedication(null)
     setShowModal(false)
     void fetchMedications()
+  }
+
+  const searchExternal = async () => {
+    const q = externalQuery.trim()
+    if (q.length < 2) {
+      setExternalError('Введите минимум 2 символа')
+      return
+    }
+    setExternalLoading(true)
+    setExternalError('')
+    try {
+      const { data } = await api.get<ExternalDrugInfoResponse>('/external/drug-info', {
+        params: { query: q },
+      })
+      setExternalData(data)
+      if (!data.source_available) {
+        setExternalError('Внешний API временно недоступен, попробуйте позже')
+      }
+    } catch (e: unknown) {
+      if (axios.isAxiosError(e) && e.response?.status === 429) {
+        setExternalError('Слишком много запросов к внешнему API, повторите позже')
+      } else {
+        setExternalError('Не удалось получить данные из внешнего API')
+      }
+      setExternalData(null)
+    } finally {
+      setExternalLoading(false)
+    }
+  }
+
+  const importExternalDrug = async (payload: ImportDrugInfoPayload) => {
+    setImportingTitle(payload.title)
+    try {
+      await api.post('/external/drug-info/import', {
+        title: payload.title,
+        indication: payload.indication ?? null,
+        warnings: payload.warnings ?? null,
+      })
+      setError('')
+      await fetchMedications()
+    } catch (e: unknown) {
+      if (axios.isAxiosError(e) && e.response?.status === 409) {
+        setError('Это лекарство уже есть в вашем каталоге')
+      } else {
+        setError('Не удалось импортировать лекарство')
+      }
+    } finally {
+      setImportingTitle(null)
+    }
   }
 
   const items = data?.items ?? []
@@ -322,6 +390,75 @@ function MedicationList() {
               Параметры сохраняются в адресе страницы — можно поделиться ссылкой или использовать «Назад» в
               браузере.
             </p>
+          </section>
+
+          <section className="filters-panel" aria-label="Импорт из внешнего API">
+            <h3 style={{ marginTop: 0 }}>Добавить из внешнего API</h3>
+            <div className="filters-actions">
+              <input
+                type="text"
+                className="form-input"
+                placeholder="Например: Aspirin"
+                value={externalQuery}
+                onChange={(e) => setExternalQuery(e.target.value)}
+                style={{ minWidth: 260, flex: 1 }}
+              />
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => void searchExternal()}
+                disabled={externalLoading}
+              >
+                {externalLoading ? 'Поиск…' : 'Искать во внешнем API'}
+              </button>
+            </div>
+            {externalError ? <div className="error-message">{externalError}</div> : null}
+
+            {externalData && externalData.items.length > 0 ? (
+              <div className="medications-list" style={{ marginTop: '0.75rem' }}>
+                {externalData.items.some((it) => it.source === 'rxnav') ? (
+                  <p className="muted" style={{ marginBottom: '0.5rem' }}>
+                    RxNorm: только варианты названия из справочника NIH; тексты инструкции как у OpenFDA не
+                    подгружаются.
+                  </p>
+                ) : null}
+                {externalData.items.map((it, idx) => (
+                  <div className="medication-item" key={`${it.title}-${idx}`}>
+                    <div className="medication-name">
+                      {it.title}
+                      <span className="muted" style={{ marginLeft: '0.35rem', fontSize: '0.85em' }}>
+                        ({it.source === 'rxnav' ? 'RxNorm' : 'OpenFDA'})
+                      </span>
+                    </div>
+                    {(it.source !== 'rxnav' || it.indication) && (
+                      <div className="medication-description">
+                        {it.source === 'rxnav'
+                          ? it.indication
+                          : it.indication || 'Показания не указаны'}
+                      </div>
+                    )}
+                    <div className="medication-actions">
+                      <button
+                        type="button"
+                        className="action-btn edit-btn"
+                        onClick={() =>
+                          void importExternalDrug({
+                            title: it.title,
+                            indication: it.indication,
+                            warnings: it.warnings,
+                          })
+                        }
+                        disabled={importingTitle === it.title}
+                      >
+                        {importingTitle === it.title ? 'Добавление…' : 'Добавить в каталог'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : externalData && !externalLoading ? (
+              <p className="pagination-summary">По внешнему API ничего не найдено</p>
+            ) : null}
           </section>
 
           {error && <div className="error-message">{error}</div>}

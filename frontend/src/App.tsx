@@ -1,17 +1,20 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import Layout from './components/Layout'
-import HealthCheck from './pages/HealthCheck'
+import { lazy, Suspense } from 'react'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Home from './pages/Home'
 import Profile from './pages/Profile'
 import MedicationList from './pages/MedicationList'
-import MedicationDetail from './pages/MedicationDetail'
-import MedicationSchedule from './pages/MedicationSchedule'
-import MedicationSchedulePage from './pages/MedicationSchedulePage'
-import AdminPanel from './pages/AdminPanel'
+import NotFound from './pages/NotFound'
 import './App.css'
 import { useEffect, useState, type ReactElement } from 'react'
+
+const HealthCheck = lazy(() => import('./pages/HealthCheck'))
+const MedicationDetail = lazy(() => import('./pages/MedicationDetail'))
+const MedicationSchedule = lazy(() => import('./pages/MedicationSchedule'))
+const MedicationSchedulePage = lazy(() => import('./pages/MedicationSchedulePage'))
+const AdminPanel = lazy(() => import('./pages/AdminPanel'))
 
 function App() {
   const [token, setToken] = useState(() => localStorage.getItem('access_token'))
@@ -39,22 +42,30 @@ function App() {
   return (
     <Router>
       <Layout>
-        <Routes>
+        <Suspense fallback={<div className="container">Загрузка страницы...</div>}>
+          <Routes>
           <Route path="/login" element={!isAuthenticated ? <Login /> : <Navigate to="/" />} />
           <Route path="/register" element={!isAuthenticated ? <Register /> : <Navigate to="/" />} />
 
           <Route path="/" element={requireAuth(<Home />)} />
           <Route path="/profile" element={requireAuth(<Profile />)} />
-          <Route path="/medications/schedule" element={requireAuth(<MedicationSchedulePage />)} />
-          <Route path="/medications/:id/schedule" element={requireAuth(<MedicationSchedule />)} />
+          <Route
+            path="/medications/schedule"
+            element={requireAuth(<MedicationSchedulePage />)}
+          />
+          <Route
+            path="/medications/:id/schedule"
+            element={requireAuth(<MedicationSchedule />)}
+          />
           <Route path="/medications/:id" element={requireAuth(<MedicationDetail />)} />
           <Route path="/medications" element={requireAuth(<MedicationList />)} />
           <Route path="/admin" element={requireRole(['admin'], <AdminPanel />)} />
 
           <Route path="/health" element={<HealthCheck />} />
 
-          <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
+          <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
       </Layout>
     </Router>
   )

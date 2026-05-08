@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Calendar from '../components/Calendar'
 import BottomNav from '../components/BottomNav'
+import { useSeo } from '../hooks/useSeo'
 import api from '../services/api'
 import type {
   AppointmentRow,
@@ -29,6 +30,12 @@ interface DayAppointmentsResponse {
 }
 
 function Home() {
+  useSeo({
+    title: 'Главная | Medication Tracker',
+    description: 'Личный кабинет и календарь приема лекарств.',
+    robots: 'noindex, nofollow',
+    canonicalPath: '/',
+  })
   const navigate = useNavigate()
   const [selectedFamilyMember, setSelectedFamilyMember] = useState(() => {
     const saved = localStorage.getItem('selectedFamilyMember')

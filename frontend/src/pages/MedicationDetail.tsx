@@ -2,8 +2,15 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import axios from 'axios'
 import BottomNav from '../components/BottomNav'
+import { useSeo } from '../hooks/useSeo'
 import api from '../services/api'
-import type { Medication, MedicationFileMeta, PresignedDownload } from '../types/models'
+import { externalLookupQuery } from '../utils/externalDrugQuery'
+import type {
+  ExternalDrugInfoResponse,
+  Medication,
+  MedicationFileMeta,
+  PresignedDownload,
+} from '../types/models'
 import './MedicationDetail.css'
 
 function formatBytes(n: number) {
@@ -42,6 +49,9 @@ function MedicationDetail() {
   const [error, setError] = useState('')
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle')
   const [uploadError, setUploadError] = useState('')
+  const [drugInfo, setDrugInfo] = useState<ExternalDrugInfoResponse | null>(null)
+  const [drugInfoLoading, setDrugInfoLoading] = useState(false)
+  const [drugInfoError, setDrugInfoError] = useState('')
 
   useEffect(() => {
     if (!id || Number.isNaN(medId)) {
@@ -49,6 +59,15 @@ function MedicationDetail() {
       setLoading(false)
     }
   }, [id, medId])
+
+  useSeo({
+    title: medication ? `${medication.name} | Medication Tracker` : 'Лекарство | Medication Tracker',
+    description: medication
+      ? `Карточка лекарства ${medication.name}. Вложения, расписание, внешние данные.`
+      : 'Карточка лекарства',
+    robots: 'noindex, nofollow',
+    canonicalPath: Number.isNaN(medId) ? '/medications' : `/medications/${medId}`,
+  })
 
   const loadMedication = useCallback(async () => {
     if (!id || Number.isNaN(medId)) return
@@ -80,6 +99,31 @@ function MedicationDetail() {
     }
   }, [id, medId])
 
+  const loadExternalInfo = useCallback(async () => {
+    if (!medication?.name) return
+    setDrugInfoLoading(true)
+    setDrugInfoError('')
+    try {
+      const lookup = externalLookupQuery(medication.name)
+      const { data } = await api.get<ExternalDrugInfoResponse>('/external/drug-info', {
+        params: { query: lookup },
+      })
+      setDrugInfo(data)
+      if (!data.source_available) {
+        setDrugInfoError('Внешний API временно недоступен. Отображены локальные данные.')
+      }
+    } catch (e: unknown) {
+      if (axios.isAxiosError(e) && e.response?.status === 429) {
+        setDrugInfoError('Превышен лимит запросов к внешнему API. Попробуйте позже.')
+      } else {
+        setDrugInfoError('Не удалось получить данные из внешнего API.')
+      }
+      setDrugInfo(null)
+    } finally {
+      setDrugInfoLoading(false)
+    }
+  }, [medication?.name])
+
   useEffect(() => {
     void loadMedication()
   }, [loadMedication])
@@ -87,6 +131,10 @@ function MedicationDetail() {
   useEffect(() => {
     if (medication) void loadFiles()
   }, [medication, loadFiles])
+
+  useEffect(() => {
+    if (medication) void loadExternalInfo()
+  }, [medication, loadExternalInfo])
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -251,6 +299,46 @@ function MedicationDetail() {
                 </li>
               ))}
             </ul>
+          )}
+        </section>
+
+        <section className="files-section">
+          <h2>Внешние данные о препарате</h2>
+          <p className="files-hint">
+            Источники: OpenFDA и при недоступности — справочник RxNorm (NIH), через backend.
+          </p>
+          {drugInfoLoading ? (
+            <p>Загрузка внешних данных…</p>
+          ) : drugInfoError ? (
+            <div className="error-message">{drugInfoError}</div>
+          ) : !drugInfo || drugInfo.items.length === 0 ? (
+            <p className="muted">
+              По этому названию ничего не найдено в OpenFDA / RxNorm. Часто помогает{' '}
+              <strong>латинское</strong> название в карточке (например ibuprofen вместо «ибупрофен») или
+              короткое имя бренда из квадратных скобок в длинном названии.
+            </p>
+          ) : (
+            <>
+              {drugInfo.items.some((it) => it.source === 'rxnav') ? (
+                <p className="muted" style={{ marginBottom: '0.75rem' }}>
+                  Записи из RxNorm — это варианты названия из справочника NIH; полный текст инструкции (как в
+                  OpenFDA) сюда не подгружается.
+                </p>
+              ) : null}
+              <ul className="files-list">
+                {drugInfo.items.map((it, idx) => (
+                  <li key={`${it.title}-${idx}`} className="files-item">
+                    <strong>{it.title}</strong>
+                    {it.source === 'rxnav' ? (
+                      it.indication ? <p className="muted">{it.indication}</p> : null
+                    ) : (
+                      <p className="muted">{it.indication || 'Показания не указаны'}</p>
+                    )}
+                    {it.warnings ? <p className="muted">Предупреждения: {it.warnings}</p> : null}
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </section>
       </div>

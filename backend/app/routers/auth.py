@@ -24,6 +24,11 @@ from app.schemas.auth import (
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
+def _normalize_phone(value: str) -> str:
+    # Оставляем только цифры для устойчивого сравнения (+7 999... == +7999...)
+    return "".join(ch for ch in value if ch.isdigit())
+
+
 @router.post("/login", response_model=TokenPairResponse)
 def login(credentials: LoginRequest, db: Session = Depends(get_db)):
     """
@@ -32,6 +37,13 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
     Возвращает JWT токен
     """
     user = db.query(db_models.User).filter(db_models.User.phone == credentials.phone).first()
+    if not user:
+        normalized = _normalize_phone(credentials.phone)
+        # Fallback для старых данных в БД с разными форматами телефона
+        for candidate in db.query(db_models.User).all():
+            if _normalize_phone(candidate.phone) == normalized:
+                user = candidate
+                break
     if not user or not verify_password(credentials.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -62,7 +74,13 @@ def register(user_data: RegisterRequest, db: Session = Depends(get_db)):
     Регистрация нового пользователя
     Создает аккаунт с номером телефона, паролем и именем
     """
+    normalized = _normalize_phone(user_data.phone)
     existing = db.query(db_models.User).filter(db_models.User.phone == user_data.phone).first()
+    if not existing:
+        for candidate in db.query(db_models.User).all():
+            if _normalize_phone(candidate.phone) == normalized:
+                existing = candidate
+                break
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

@@ -2,9 +2,16 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import api, { setTokens, clearTokens } from '../services/api'
+import { useSeo } from '../hooks/useSeo'
 import './Auth.css'
 
 function Login() {
+  useSeo({
+    title: 'Вход | Medication Tracker',
+    description: 'Вход в личный кабинет для управления лекарствами.',
+    robots: 'noindex, nofollow',
+    canonicalPath: '/login',
+  })
   const [phone, setPhone] = useState('+7 966 113 10 57')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)

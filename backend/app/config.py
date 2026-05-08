@@ -36,6 +36,20 @@ class Settings(BaseSettings):
     )
     file_download_token_ttl_seconds: int = Field(default=900, env="FILE_DOWNLOAD_TOKEN_TTL_SECONDS")
 
+    # External API integration (ЛР4)
+    external_drug_api_url: str = Field(
+        default="https://api.fda.gov/drug/label.json",
+        env="EXTERNAL_DRUG_API_URL",
+    )
+    external_rxnav_drugs_url: str = Field(
+        default="https://rxnav.nlm.nih.gov/REST/drugs.json",
+        env="EXTERNAL_RXNAV_DRUGS_URL",
+    )
+    external_drug_api_key: str | None = Field(default=None, env="EXTERNAL_DRUG_API_KEY")
+    external_api_timeout_seconds: float = Field(default=6.0, env="EXTERNAL_API_TIMEOUT_SECONDS")
+    external_api_retry_count: int = Field(default=2, env="EXTERNAL_API_RETRY_COUNT")
+    external_api_rate_limit_per_minute: int = Field(default=30, env="EXTERNAL_API_RATE_LIMIT_PER_MINUTE")
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

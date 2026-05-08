@@ -55,6 +55,25 @@ export interface PresignedDownload {
   expires_in: number
 }
 
+export interface ExternalDrugInfoItem {
+  title: string
+  indication?: string | null
+  warnings?: string | null
+  source: string
+}
+
+export interface ExternalDrugInfoResponse {
+  query: string
+  items: ExternalDrugInfoItem[]
+  source_available: boolean
+}
+
+export interface ImportDrugInfoPayload {
+  title: string
+  indication?: string | null
+  warnings?: string | null
+}
+
 export interface UserProfile {
   name: string
   phone: string

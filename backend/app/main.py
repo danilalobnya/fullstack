@@ -1,12 +1,24 @@
+from datetime import date
 from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import PlainTextResponse, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.routers import appointments, auth, health, medication_files, medications, schedules, users
+from app.config import settings
+from app.routers import (
+    appointments,
+    auth,
+    external_data,
+    health,
+    medication_files,
+    medications,
+    schedules,
+    users,
+)
 from app.database import Base, engine
 
 _SWAGGER_STATIC_DIR = Path(__file__).resolve().parent / "static" / "swagger-ui"
@@ -58,6 +70,7 @@ app.include_router(appointments.router, prefix="/api/v1")
 app.include_router(medication_files.router, prefix="/api/v1")
 app.include_router(medications.router, prefix="/api/v1")
 app.include_router(schedules.router, prefix="/api/v1")
+app.include_router(external_data.router, prefix="/api/v1")
 
 
 @app.get("/docs", include_in_schema=False)
@@ -87,3 +100,45 @@ async def root():
         "docs": "/docs",
         "openapi": "/openapi.json",
     }
+
+
+@app.get("/robots.txt", include_in_schema=False, response_class=PlainTextResponse)
+async def robots_txt():
+    return "\n".join(
+        [
+            "User-agent: *",
+            "Allow: /",
+            "Disallow: /admin",
+            "Disallow: /profile",
+            "Disallow: /medications",
+            "Sitemap: " + settings.public_base_url.rstrip("/") + "/sitemap.xml",
+        ]
+    )
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+async def sitemap_xml():
+    base = settings.public_base_url.rstrip("/")
+    today = date.today().isoformat()
+    urls = [
+        (f"{base}/health", "weekly", "0.8"),
+        (f"{base}/login", "monthly", "0.5"),
+        (f"{base}/register", "monthly", "0.4"),
+    ]
+    body = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+    ]
+    for loc, changefreq, priority in urls:
+        body.extend(
+            [
+                "  <url>",
+                f"    <loc>{loc}</loc>",
+                f"    <lastmod>{today}</lastmod>",
+                f"    <changefreq>{changefreq}</changefreq>",
+                f"    <priority>{priority}</priority>",
+                "  </url>",
+            ]
+        )
+    body.append("</urlset>")
+    return Response(content="\n".join(body), media_type="application/xml")

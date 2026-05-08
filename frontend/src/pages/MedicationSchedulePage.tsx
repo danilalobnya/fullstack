@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Calendar from '../components/Calendar'
 import BottomNav from '../components/BottomNav'
-import api from '../services/api'
-import type { CalendarViewType, Medication, PaginatedMedications, PeriodType } from '../types/models'
+import { fetchAllMedications } from '../services/api'
+import type { CalendarViewType, Medication, PeriodType } from '../types/models'
 import './MedicationSchedulePage.css'
 
 function MedicationSchedulePage() {
@@ -53,10 +53,8 @@ function MedicationSchedulePage() {
           return
         }
 
-        const { data: page } = await api.get<PaginatedMedications | Medication[]>('/medications/', {
-          params: { page: 1, page_size: 500 },
-        })
-        setMedications(Array.isArray(page) ? page : page.items)
+        const items = await fetchAllMedications()
+        setMedications(items)
       } catch {
         setError('Не удалось загрузить список лекарств')
       } finally {

@@ -1,5 +1,5 @@
 import axios, { AxiosHeaders } from 'axios'
-import type { LoginResponse } from '../types/models'
+import type { LoginResponse, Medication, PaginatedMedications } from '../types/models'
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api/v1'
 
@@ -118,5 +118,26 @@ api.interceptors.response.use(
     return Promise.reject(error)
   },
 )
+
+/** Список лекарств с пагинацией API: не больше 100 на страницу — подгружаем все страницы. */
+export async function fetchAllMedications(): Promise<Medication[]> {
+  const pageSize = 100
+  const acc: Medication[] = []
+  let page = 1
+  for (;;) {
+    const { data } = await api.get<PaginatedMedications | Medication[]>('/medications/', {
+      params: { page, page_size: pageSize },
+    })
+    if (Array.isArray(data)) {
+      acc.push(...data)
+      return acc
+    }
+    acc.push(...data.items)
+    const pages = data.pages && data.pages > 0 ? data.pages : 1
+    if (page >= pages || data.items.length < pageSize) break
+    page += 1
+  }
+  return acc
+}
 
 export default api

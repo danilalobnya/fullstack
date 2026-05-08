@@ -1,8 +1,15 @@
 import { useEffect, useState } from 'react'
 import type { DetailedHealthPayload, HealthPayload } from '../types/models'
+import { useSeo } from '../hooks/useSeo'
 import './HealthCheck.css'
 
 function HealthCheck() {
+  useSeo({
+    title: 'Статус сервиса | Medication Tracker',
+    description: 'Публичная страница проверки работоспособности API сервиса.',
+    robots: 'index, follow',
+    canonicalPath: '/health',
+  })
   const [healthData, setHealthData] = useState<HealthPayload | null>(null)
   const [detailedHealth, setDetailedHealth] = useState<DetailedHealthPayload | null>(null)
   const [loading, setLoading] = useState(true)
@@ -45,6 +52,15 @@ function HealthCheck() {
           <p>Загрузка...</p>
         ) : (
           <div className="health-results">
+            <script type="application/ld+json">
+              {JSON.stringify({
+                '@context': 'https://schema.org',
+                '@type': 'WebPage',
+                name: 'Health Check',
+                url: `${window.location.origin}/health`,
+                description: 'Публичная страница мониторинга состояния сервиса',
+              })}
+            </script>
             <div className="health-card">
               <h2>Базовый Health Check</h2>
               {healthData && (
