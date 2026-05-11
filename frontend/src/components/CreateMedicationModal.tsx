@@ -16,6 +16,8 @@ interface FormState {
   takeWithFood: TakeWithFood
 }
 
+const API_BASE = import.meta.env.VITE_API_URL || '/api/v1'
+
 function CreateMedicationModal({ onClose, onSaved, medication }: CreateMedicationModalProps) {
   const [formData, setFormData] = useState<FormState>({
     name: 'Коллаген морской',
@@ -60,8 +62,9 @@ function CreateMedicationModal({ onClose, onSaved, medication }: CreateMedicatio
         return
       }
 
-      const base = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1'
-      const endpoint = isEditing ? `${base}/medications/${medication!.id}` : `${base}/medications/`
+      const endpoint = isEditing
+        ? `${API_BASE}/medications/${medication!.id}`
+        : `${API_BASE}/medications/`
 
       const response = await fetch(endpoint, {
         method: isEditing ? 'PUT' : 'POST',

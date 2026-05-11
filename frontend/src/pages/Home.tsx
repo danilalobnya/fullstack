@@ -29,6 +29,8 @@ interface DayAppointmentsResponse {
   stats?: DayAppointmentsStats
 }
 
+const API_BASE = import.meta.env.VITE_API_URL || '/api/v1'
+
 function Home() {
   useSeo({
     title: 'Главная | Medication Tracker',
@@ -115,8 +117,7 @@ function Home() {
         params.append('family_member_id', familyMemberIdNum.toString())
       }
 
-      const base = 'http://localhost:8000/api/v1'
-      const url = `${base}/appointments/day/${dateStr}?${params.toString()}`
+      const url = `${API_BASE}/appointments/day/${dateStr}?${params.toString()}`
       console.log('[DEBUG] Loading appointments:', {
         selectedFamilyMember,
         selectedFamilyMemberType: typeof selectedFamilyMember,
@@ -227,8 +228,7 @@ function Home() {
         return
       }
 
-      const base = 'http://localhost:8000/api/v1'
-      const url = new URL(`${base}/appointments/status`)
+      const url = new URL(`${API_BASE}/appointments/status`)
       const familyMemberIdNum =
         typeof selectedFamilyMember === 'string'
           ? parseInt(selectedFamilyMember, 10)
@@ -308,8 +308,7 @@ function Home() {
         return
       }
 
-      const base = 'http://localhost:8000/api/v1'
-      const url = new URL(`${base}/appointments/${appointmentId}`)
+      const url = new URL(`${API_BASE}/appointments/${appointmentId}`)
       const familyMemberIdNum =
         typeof selectedFamilyMember === 'string'
           ? parseInt(selectedFamilyMember, 10)

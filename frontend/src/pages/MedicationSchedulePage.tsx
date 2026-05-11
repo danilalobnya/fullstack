@@ -6,6 +6,8 @@ import { fetchAllMedications } from '../services/api'
 import type { CalendarViewType, Medication, PeriodType } from '../types/models'
 import './MedicationSchedulePage.css'
 
+const API_BASE = import.meta.env.VITE_API_URL || '/api/v1'
+
 function MedicationSchedulePage() {
   const navigate = useNavigate()
   const [medications, setMedications] = useState<Medication[]>([])
@@ -137,8 +139,7 @@ function MedicationSchedulePage() {
         ...(familyMemberId && { family_member_id: familyMemberId }),
       }
 
-      const base = 'http://localhost:8000/api/v1'
-      const response = await fetch(`${base}/appointments/`, {
+      const response = await fetch(`${API_BASE}/appointments/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
